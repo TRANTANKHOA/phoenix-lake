@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Architecture — Phoenix Lake</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a class="active" href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>System Architecture</h1>
+<p class="subtitle">Four components, two planes, one invariant.</p>
+
+<h2>The shape</h2>
+
+<div class="diagram">
+  <p class="diagram-title">System architecture — Phoenix Lake</p>
+  <svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="phoenixGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+      </linearGradient>
+      <linearGradient id="duckdbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#1d4ed8;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+      </linearGradient>
+      <linearGradient id="postgresGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#be185d;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+      </linearGradient>
+      <linearGradient id="s3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#065f46;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10b981;stop-opacity:1" />
+      </linearGradient>
+      <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Control Plane Box -->
+    <rect x="20" y="20" width="350" height="120" rx="8" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1" stroke-dasharray="4,4"/>
+    <text x="30" y="38" font-size="10" fill="#7c3aed" font-weight="600">CONTROL PLANE</text>
+    
+    <!-- Phoenix -->
+    <rect x="40" y="48" width="150" height="76" rx="8" fill="url(#phoenixGrad)"/>
+    <text x="115" y="72" font-size="13" fill="white" font-weight="600" text-anchor="middle">Phoenix</text>
+    <text x="115" y="90" font-size="9" fill="rgba(255,255,255,0.8)" text-anchor="middle">API · LiveView · Oban</text>
+    <text x="115" y="104" font-size="9" fill="rgba(255,255,255,0.7)" text-anchor="middle">HTTP · WebSocket · Auth</text>
+    
+    <!-- Postgres -->
+    <rect x="210" y="48" width="140" height="76" rx="8" fill="url(#postgresGrad)"/>
+    <text x="280" y="72" font-size="13" fill="white" font-weight="600" text-anchor="middle">Postgres</text>
+    <text x="280" y="90" font-size="9" fill="rgba(255,255,255,0.8)" text-anchor="middle">App metadata</text>
+    <text x="280" y="104" font-size="9" fill="rgba(255,255,255,0.7)" text-anchor="middle">3 DuckLake catalogs</text>
+    
+    <!-- Data Plane Box -->
+    <rect x="430" y="20" width="350" height="120" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1" stroke-dasharray="4,4"/>
+    <text x="440" y="38" font-size="10" fill="#1d4ed8" font-weight="600">DATA PLANE</text>
+    
+    <!-- DuckDB -->
+    <rect x="450" y="48" width="150" height="76" rx="8" fill="url(#duckdbGrad)"/>
+    <text x="525" y="72" font-size="13" fill="white" font-weight="600" text-anchor="middle">DuckDB</text>
+    <text x="525" y="90" font-size="9" fill="rgba(255,255,255,0.8)" text-anchor="middle">Query · Ingest · Transform</text>
+    <text x="525" y="104" font-size="9" fill="rgba(255,255,255,0.7)" text-anchor="middle">Short-lived processes</text>
+    
+    <!-- S3 -->
+    <rect x="620" y="48" width="140" height="76" rx="8" fill="url(#s3Grad)"/>
+    <text x="690" y="72" font-size="13" fill="white" font-weight="600" text-anchor="middle">S3</text>
+    <text x="690" y="90" font-size="9" fill="rgba(255,255,255,0.8)" text-anchor="middle">Staging → Landing</text>
+    <text x="690" y="104" font-size="9" fill="rgba(255,255,255,0.7)" text-anchor="middle">Refining · Reporting</text>
+    
+    <!-- Arrows -->
+    <path d="M 115 124 L 115 165 L 525 165 L 525 124" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)"/>
+    <text x="320" y="158" font-size="9" fill="#64748b" text-anchor="middle">queries · ingestion jobs</text>
+    
+    <path d="M 525 124 L 525 145 L 690 145 L 690 124" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)"/>
+    
+    <path d="M 525 124 L 525 185 L 280 185 L 280 124" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)"/>
+    <text x="402" y="178" font-size="9" fill="#64748b" text-anchor="middle">publish snapshots</text>
+    
+    <!-- Invariant callout -->
+    <rect x="20" y="210" width="760" height="150" rx="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+    <rect x="20" y="210" width="130" height="20" rx="4" fill="#22c55e"/>
+    <text x="85" y="224" font-size="10" fill="white" font-weight="700" text-anchor="middle">INVARIANT</text>
+    <text x="40" y="252" font-size="12" fill="#166534" font-weight="600">Every write follows the same path:</text>
+    <text x="40" y="278" font-size="12" fill="#166534">1. Write immutable Parquet to S3</text>
+    <text x="280" y="278" font-size="16" fill="#22c55e" font-weight="bold">→</text>
+    <text x="310" y="278" font-size="12" fill="#166534">2. Publish via Postgres transaction</text>
+    <text x="40" y="300" font-size="12" fill="#166534">3. Readers see consistent snapshot — never a partial write</text>
+    <line x1="40" y1="315" x2="760" y2="315" stroke="#86efac" stroke-width="1"/>
+    <text x="40" y="340" font-size="11" fill="#15803d" font-weight="500">Concurrency: one writer per table, unlimited readers — enforced by control plane</text>
+  </svg>
+</div>
+
+<div class="card-grid">
+  <div class="card"><p class="card-title"><span class="component-badge badge-phoenix">🔮 Phoenix</span></p><p class="card-desc">API · LiveView · Oban · Auth. The control plane — long-lived workflows, concurrency, real-time UI, orchestration.</p></div>
+  <div class="card"><p class="card-title"><span class="component-badge badge-duckdb">🦆 DuckDB service</span></p><p class="card-desc">Query execution · data ingestion · dbt transformation · Parquet management. The data plane — columnar scans, joins, aggregations.</p></div>
+  <div class="card"><p class="card-title"><span class="component-badge badge-postgres">🐘 Postgres</span></p><p class="card-desc">App metadata + three DuckLake catalogs (landing, refining, reporting). One database — transactions, snapshots, file lists, Oban jobs.</p></div>
+  <div class="card"><p class="card-title"><span class="component-badge badge-s3">🪣 S3</span></p><p class="card-desc">Enforced staging prefix for incoming files, plus three enforced DuckLake databases (landing, refining, reporting). Immutable Parquet; no authoritative metadata.</p></div>
+</div>
+
+<h2>Two planes</h2>
+
+<div class="diagram">
+  <p class="diagram-title">Control plane vs. data plane — Phoenix Lake</p>
+  <svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Control Plane -->
+    <rect x="20" y="20" width="360" height="160" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="2"/>
+    <text x="200" y="50" font-size="14" fill="#7c3aed" font-weight="700" text-anchor="middle">CONTROL PLANE — Elixir</text>
+    
+    <text x="40" y="80" font-size="11" fill="#475569">• HTTP/WebSocket termination</text>
+    <text x="40" y="100" font-size="11" fill="#475569">• Authentication & authorization</text>
+    <text x="40" y="120" font-size="11" fill="#475569">• Job scheduling (Oban)</text>
+    <text x="40" y="140" font-size="11" fill="#475569">• Real-time UI (LiveView)</text>
+    <text x="40" y="160" font-size="11" fill="#7c3aed" font-weight="600">Holds decisions about data, not data itself</text>
+    
+    <defs>
+      <marker id="arrowRight" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+      <marker id="arrowLeft" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto">
+        <polygon points="10 0, 0 3.5, 10 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Arrows -->
+    <path d="M 200 180 L 200 195 L 610 195 L 610 180" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrowRight)"/>
+    <text x="405" y="190" font-size="9" fill="#64748b" text-anchor="middle">jobs</text>
+    
+    <path d="M 610 180 L 610 205 L 200 205 L 200 180" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrowLeft)"/>
+    <text x="405" y="215" font-size="9" fill="#64748b" text-anchor="middle">results</text>
+    
+    <!-- Data Plane -->
+    <rect x="440" y="20" width="340" height="160" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+    <text x="610" y="50" font-size="14" fill="#1d4ed8" font-weight="700" text-anchor="middle">DATA PLANE — DuckDB</text>
+    
+    <text x="460" y="80" font-size="11" fill="#475569">• Scan Parquet, join, aggregate</text>
+    <text x="460" y="100" font-size="11" fill="#475569">• Write new Parquet files</text>
+    <text x="460" y="120" font-size="11" fill="#475569">• Partition pruning</text>
+    <text x="460" y="140" font-size="11" fill="#475569">• Short-lived processes</text>
+    <text x="460" y="160" font-size="11" fill="#1d4ed8" font-weight="600">Kept off BEAM — won't degrade web tier</text>
+  </svg>
+</div>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">Control plane — Elixir</div>
+    <div class="body">
+      <p>Owns everything concurrent, long-lived, or user-facing: HTTP and the UI, auth, the job scheduler, and the record of what work exists and its state.</p>
+      <p>Holds almost no data — it holds <strong>decisions about</strong> data, and streams results to users.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Data plane — DuckDB</div>
+    <div class="body">
+      <p>Owns the CPU- and memory-heavy work: scanning Parquet, joining, aggregating, writing new Parquet.</p>
+      <p>A unit of work is a short-lived process that starts, does one job, and exits — kept off the BEAM scheduler so one heavy query can't degrade the web tier.</p>
+    </div>
+  </div>
+</div>
+<div class="info info-blue">Why isolate DuckDB from the BEAM? The BEAM excels at concurrency and I/O and deliberately refuses to let one task monopolise the machine — which is exactly what a large analytical scan does. Running DuckDB as a separate service (or in dedicated workers) keeps the web tier responsive and lets the two scale independently.</div>
+
+<h2>Infrastructure</h2>
+<p class="subtitle">Proposed components, grouped by role.</p>
+<div class="spec-rows">
+  <div class="spec-row"><div class="spec-label">Compute</div><div class="spec-value">A Phoenix/Elixir cluster (web + Oban workers) and a DuckDB query service. The two scale on independent axes — web concurrency vs. query CPU/RAM.</div></div>
+  <div class="spec-row"><div class="spec-label">Postgres</div><div class="spec-value">One managed instance: app metadata (owned by Phoenix) and three DuckLake catalogs — landing, refining, reporting — created automatically for every project.</div></div>
+  <div class="spec-row"><div class="spec-label">S3</div><div class="spec-value">An enforced staging prefix for incoming files, plus three enforced DuckLake databases — landing (raw), refining (transformed), reporting (materialized). Users write models; the platform provides the structure.</div></div>
+</div>
+<p style="font-size:12px;color:#475569;">Per-environment sizing would follow the repo convention of one config file per environment:</p>
+<span class="config-pill">dev</span><span class="config-pill">prod</span><span class="config-pill">produs</span><span class="config-pill">prodae</span><span class="config-pill">prodbr</span>
+
+<h2>Design validation</h2>
+<p class="subtitle">Checked against current DuckLake/DuckDB documentation (mid-2026). Core claims hold; three needed nuance.</p>
+
+<div class="info info-green"><strong>Confirmed.</strong> Metadata in a SQL database (Postgres is first-class) with data as Parquet on object storage; catalog-in-SQL drops metadata latency from seconds to milliseconds and removes separate catalog servers; snapshots are cheap transactional rows (millions can coexist); full ACID with snapshot isolation including DDL; and DuckDB's one-writer/many-readers single-process model — which the design works <em>with</em>, not against.</div>
+
+<div class="card-grid">
+  <div class="card"><p class="card-title">Multi-writer is coming, not relied on <span class="badge badge-warning">beta</span></p><p class="card-desc">The Quack remote protocol turns DuckDB into a client/server DB with multiple writers, but is beta as of v1.5.2. The design serialises writers in the control plane instead.</p></div>
+  <div class="card"><p class="card-title">Interop improving, still behind Iceberg <span class="badge badge-info">WIP</span></p><p class="card-desc">DuckLake 1.0 lists Spark, Trino, DataFusion, Pandas clients and 0.3 added Iceberg interop — but most are work-in-progress and native Athena/Snowflake/BigQuery reads aren't there yet.</p></div>
+  <div class="card"><p class="card-title">"No compaction" = metadata, not data <span class="badge badge-success">clarified</span></p><p class="card-desc">Eliminating catalog servers and metadata compaction is real. Data-file compaction (merging small Parquet for scan speed) is still worthwhile and stays a DuckDB-service job.</p></div>
+</div>
+
+<div class="related">
+  <span class="related-label">Sources &amp; further reading</span>
+  <div class="related-grid">
+    <a class="related-link" href="https://ducklake.select/2025/05/27/ducklake-01/"><span class="name">DuckLake — SQL as a Lakehouse Format</span><span class="desc">Launch post: metadata in SQL, data in Parquet.</span></a>
+    <a class="related-link" href="https://ducklake.select/docs/stable/duckdb/advanced_features/transactions"><span class="name">DuckLake Transactions docs</span><span class="desc">ACID, snapshot isolation, transactional DDL.</span></a>
+    <a class="related-link" href="https://motherduck.com/learn/ducklake-guide/"><span class="name">The Essential Guide to DuckLake</span><span class="desc">MotherDuck: catalog DBs, latency, no catalog server.</span></a>
+    <a class="related-link" href="https://duckdb.org/docs/current/connect/concurrency"><span class="name">DuckDB Concurrency docs</span><span class="desc">One writer, many readers; single-process model.</span></a>
+    <a class="related-link" href="https://github.com/motherduckdb/ducklake-spark"><span class="name">ducklake-spark connector</span><span class="desc">Spark DataSource V2 connector for DuckLake.</span></a>
+    <a class="related-link" href="https://github.com/awitten1/trino-ducklake"><span class="name">trino-ducklake connector</span><span class="desc">Work-in-progress Trino connector.</span></a>
+    <a class="related-link" href="https://www.pracdata.io/p/is-ducklake-a-step-backward"><span class="name">Is DuckLake a Step Backward?</span><span class="desc">Critical operator perspective on maturity/interop.</span></a>
+  </div>
+</div>
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

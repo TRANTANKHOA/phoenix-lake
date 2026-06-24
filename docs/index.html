@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phoenix Lake — Architecture</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a class="active" href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+<main>
+<h1>Phoenix Lake</h1>
+<p class="subtitle">Greenfield "minimum viable lakehouse" — Elixir/Phoenix as control plane, DuckDB as engine, one Postgres for app metadata + three DuckLake catalogs (landing, refining, reporting), Parquet on pluggable storage (S3, local disk, Azure Blob).</p>
+
+<div class="info info-yellow">Design proposal, not a deployed service. It does <strong>not</strong> replace the existing Iceberg + Athena + Glue platform — it targets workloads where the largest query intermediate fits in one machine's RAM and concurrency is bounded.</div>
+
+<div class="stat-grid">
+  <div class="stat"><span class="num">4</span><span class="label">Core components</span></div>
+  <div class="stat"><span class="num">1</span><span class="label">Enforced staging prefix</span></div>
+  <div class="stat"><span class="num">3</span><span class="label">Enforced DuckLake databases</span></div>
+  <div class="stat"><span class="num">0</span><span class="label">Separate catalog servers</span></div>
+  <div class="stat"><span class="num">1</span><span class="label">Writer per table</span></div>
+</div>
+
+<h2>The shape</h2>
+<p class="subtitle">Four components, each aligned to its strength.</p>
+
+<div class="split-grid">
+  <a href="phoenix.html" class="split-card" style="text-decoration:none;">
+    <div class="head"><span class="component-badge badge-phoenix">🔮 Phoenix</span></div>
+    <div class="body">
+      <p>API · LiveView · Oban · Auth. The control plane — long-lived workflows, concurrency, real-time UI, orchestration.</p>
+    </div>
+  </a>
+  <a href="duckdb-service.html" class="split-card" style="text-decoration:none;">
+    <div class="head"><span class="component-badge badge-duckdb">🦆 DuckDB service</span></div>
+    <div class="body">
+      <p>Query execution · data ingestion · dbt transformation · Parquet management. The data plane — columnar scans, joins, aggregations.</p>
+    </div>
+  </a>
+  <a href="postgres.html" class="split-card" style="text-decoration:none;">
+    <div class="head"><span class="component-badge badge-postgres">🐘 Postgres</span></div>
+    <div class="body">
+      <p>App metadata + three DuckLake catalogs (landing, refining, reporting). One database — transactions, snapshots, file lists, Oban jobs.</p>
+    </div>
+  </a>
+  <a href="s3.html" class="split-card" style="text-decoration:none;">
+    <div class="head"><span class="component-badge badge-s3">🪣 S3</span></div>
+    <div class="body">
+      <p>Enforced staging prefix for incoming files, plus three enforced DuckLake databases (landing, refining, reporting). Immutable Parquet; no authoritative metadata.</p>
+    </div>
+  </a>
+</div>
+
+<h2>Explore the design</h2>
+<div class="card-grid">
+  <a href="architecture.html" class="card" style="text-decoration:none;">
+    <p class="card-title">System Architecture</p>
+    <p class="card-desc">Component diagram, control plane vs data plane, and the write-then-publish invariant.</p>
+  </a>
+  <a href="data-flows.html" class="card" style="text-decoration:none;">
+    <p class="card-title">Data Flows</p>
+    <p class="card-desc">Ingestion, query, and transformation flows with step-by-step breakdowns.</p>
+  </a>
+  <a href="auth.html" class="card" style="text-decoration:none;">
+    <p class="card-title">Auth Module</p>
+    <p class="card-desc">Token auth + IdP integration (Google, WorkOS, Okta) with dataset-level grants.</p>
+  </a>
+  <a href="scaling.html" class="card" style="text-decoration:none;">
+    <p class="card-title">Scaling</p>
+    <p class="card-desc">Auto-scale reads, serialized writes, scaling boundaries, and the honest decision rule.</p>
+  </a>
+  <a href="dbt.html" class="card" style="text-decoration:none;">
+    <p class="card-title">dbt Integration</p>
+    <p class="card-desc">Git-synced workflow, user/platform split, and template YAML.</p>
+  </a>
+  <a href="ui.html" class="card" style="text-decoration:none;">
+    <p class="card-title">UI Mockup</p>
+    <p class="card-desc">LiveView dashboard mockup — query builder, datasets, jobs, ingestion.</p>
+  </a>
+  <a href="deployment.html" class="card" style="text-decoration:none;">
+    <p class="card-title">Deployment</p>
+    <p class="card-desc">Docker Compose, Kubernetes, and AWS deployment modes with environment config.</p>
+  </a>
+  <a href="glossary.html" class="card" style="text-decoration:none;">
+    <p class="card-title">Glossary</p>
+    <p class="card-desc">Core concepts and technology choices with pros, cons, and rationale.</p>
+  </a>
+</div>
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

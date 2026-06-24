@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: phoenix-lake-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: phoenix_lake_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: phoenix-lake-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  duckdb-1:
+    build:
+      context: ./duckdb-service
+      dockerfile: Dockerfile
+    container_name: phoenix-lake-duckdb-1
+    environment:
+      DUCKDB_MEMORY_LIMIT: "4GB"
+      DUCKDB_THREADS: "4"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: phoenix_lake_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: phoenix-lake
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  duckdb-2:
+    build:
+      context: ./duckdb-service
+      dockerfile: Dockerfile
+    container_name: phoenix-lake-duckdb-2
+    environment:
+      DUCKDB_MEMORY_LIMIT: "4GB"
+      DUCKDB_THREADS: "4"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: phoenix_lake_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: phoenix-lake
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  duckdb-lb:
+    image: nginx:alpine
+    container_name: phoenix-lake-duckdb-lb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./nginx-duckdb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - duckdb-1
+      - duckdb-2
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phoenix-lake-app
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: ecto://postgres:postgres@postgres/phoenix_lake_dev
+      DUCKDB_HOST: duckdb-lb
+      DUCKDB_PORT: 5432
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: phoenix-lake
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      SECRET_KEY_BASE: "dev_only_secret_key_base_that_is_at_least_64_bytes_long_for_development_purposes_only"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      duckdb-lb:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  minio_data:

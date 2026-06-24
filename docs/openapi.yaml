@@ -1,0 +1,802 @@
+openapi: 3.0.3
+info:
+  title: Phoenix Lake API
+  description: API for Phoenix Lake — queries, ingestion, and job management.
+  version: 0.1.0
+  contact:
+    name: Phoenix Lake
+    url: https://github.com/TRANTANKHOA/phoenix-lake
+
+servers:
+  - url: http://localhost:4000/v1
+    description: Local development
+
+tags:
+  - name: Databases
+    description: List and inspect DuckLake databases
+  - name: Query
+    description: Run and monitor SQL queries
+  - name: Ingest
+    description: Submit and track file ingestion
+  - name: Job
+    description: Monitor and control background jobs
+  - name: Table
+    description: List tables and schemas
+  - name: Health
+    description: Service health checks
+
+paths:
+  /databases:
+    get:
+      tags: [Databases]
+      summary: List DuckLake databases
+      description: Returns the three enforced databases (landing, refining, reporting) with metadata.
+      responses:
+        '200':
+          description: List of databases
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  databases:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Database'
+    post:
+      tags: [Databases]
+      summary: Create a database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatabaseCreate'
+      responses:
+        '201':
+          description: Database created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Database'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /databases/{database}:
+    get:
+      tags: [Databases]
+      summary: Get database details
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Database details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Database'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Databases]
+      summary: Update a database
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatabaseUpdate'
+      responses:
+        '200':
+          description: Database updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Database'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Databases]
+      summary: Delete a database
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Database deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteAction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /query:
+    post:
+      tags: [Query]
+      summary: Run a SQL query
+      description: |
+        Runs a SQL query synchronously if it completes within the timeout,
+        or enqueues it as an Oban job and returns a handle for async polling.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query completed within timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '202':
+          description: Query enqueued for async execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryJobResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /query/{job_id}:
+    get:
+      tags: [Query]
+      summary: Get async query results
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Query status with results when complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryJobResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /query/{job_id}/cancel:
+    post:
+      tags: [Query]
+      summary: Cancel a running query
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Query cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ingest:
+    post:
+      tags: [Ingest]
+      summary: Upload a file to staging
+      description: |
+        Accepts a file upload and places it in the staging area (S3).
+        The ingestion worker automatically picks up staged files and
+        loads them into the DuckDB landing database. Data cleaning
+        happens later in dbt.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Parquet file to upload
+                table:
+                  type: string
+                  description: Target table name (inferred from filename if omitted)
+      responses:
+        '202':
+          description: Ingestion job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /ingest/{job_id}:
+    get:
+      tags: [Ingest]
+      summary: Check ingestion job status
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Ingestion status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ingest/{job_id}/cancel:
+    post:
+      tags: [Ingest]
+      summary: Cancel an ingestion job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Ingestion job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /table:
+    get:
+      tags: [Table]
+      summary: List all tables
+      parameters:
+        - name: database
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of tables
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tables:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Table'
+    post:
+      tags: [Table]
+      summary: Create a table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableCreate'
+      responses:
+        '201':
+          description: Table created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /table/{database}/{table}:
+    get:
+      tags: [Table]
+      summary: Get table with schema
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Table details including schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Table]
+      summary: Update a table
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableUpdate'
+      responses:
+        '200':
+          description: Table updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Table]
+      summary: Delete a table
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Table deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteAction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /job:
+    get:
+      tags: [Job]
+      summary: List background jobs
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [queued, running, succeed, failed]
+        - name: queue
+          in: query
+          schema:
+            type: string
+            enum: [interactive, ingest, transform, maintenance]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job'
+
+  /job/{job_id}:
+    get:
+      tags: [Job]
+      summary: Get job details
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /job/{job_id}/cancel:
+    post:
+      tags: [Job]
+      summary: Cancel a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAction'
+
+  /job/{job_id}/retry:
+    post:
+      tags: [Job]
+      summary: Retry a failed job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job retrying
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAction'
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+components:
+  schemas:
+    Database:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        snapshot_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DatabaseCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    DatabaseUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    QueryRequest:
+      type: object
+      required: [sql]
+      properties:
+        sql:
+          type: string
+        database:
+          type: string
+        timeout_ms:
+          type: integer
+          default: 5000
+
+    QueryResult:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: array
+        row_count:
+          type: integer
+        duration_ms:
+          type: integer
+
+    QueryJobResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [queued, running, succeed, failed]
+        job_id:
+          type: string
+        result:
+          $ref: '#/components/schemas/QueryResult'
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    JobAction:
+      type: object
+      properties:
+        status:
+          type: string
+          example: cancelled
+        job_id:
+          type: string
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        queue:
+          type: string
+          enum: [interactive, ingest, transform, maintenance]
+        status:
+          type: string
+          enum: [queued, running, succeed, failed]
+        worker:
+          type: string
+        args:
+          type: object
+        result:
+          type: object
+        attempts:
+          type: integer
+        inserted_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    IngestAccepted:
+      type: object
+      properties:
+        status:
+          type: string
+          example: accepted
+        job_id:
+          type: string
+        table:
+          type: string
+
+    IngestStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [queued, running, succeed, failed]
+        job_id:
+          type: string
+        table:
+          type: string
+        rows_inserted:
+          type: integer
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    Table:
+      type: object
+      properties:
+        name:
+          type: string
+        database:
+          type: string
+        description:
+          type: string
+        row_count:
+          type: integer
+        size_bytes:
+          type: integer
+        snapshot_id:
+          type: integer
+        partition_columns:
+          type: array
+          items:
+            type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Column'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TableCreate:
+      type: object
+      required: [name, database, columns]
+      properties:
+        name:
+          type: string
+        database:
+          type: string
+        description:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnCreate'
+        partition_columns:
+          type: array
+          items:
+            type: string
+
+    TableUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnCreate'
+        partition_columns:
+          type: array
+          items:
+            type: string
+
+    ColumnCreate:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        nullable:
+          type: boolean
+          default: true
+        description:
+          type: string
+        partition_key:
+          type: boolean
+          default: false
+
+    DeleteAction:
+      type: object
+      properties:
+        status:
+          type: string
+          example: deleted
+        name:
+          type: string
+
+    Column:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        nullable:
+          type: boolean
+        description:
+          type: string
+        partition_key:
+          type: boolean
+
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        duckdb:
+          type: string
+          example: connected
+        postgres:
+          type: string
+          example: connected
+        s3:
+          type: string
+          example: connected
+        version:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+
+  parameters:
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Job identifier
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security: []

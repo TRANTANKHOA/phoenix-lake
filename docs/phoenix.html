@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phoenix — Phoenix Lake</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a class="active" href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Phoenix — Control Plane</h1>
+<p class="subtitle">Phoenix does no heavy data work; it coordinates. API, LiveView, Oban, Auth — the brain of the system.</p>
+
+<div class="stat-grid">
+  <div class="stat"><span class="num">4</span><span class="label">Core roles</span></div>
+  <div class="stat"><span class="num">0</span><span class="label">Data processed</span></div>
+  <div class="stat"><span class="num">∞</span><span class="label">Concurrent users</span></div>
+  <div class="stat"><span class="num">1</span><span class="label">Auth boundary</span></div>
+</div>
+
+<h2>API</h2>
+<p class="subtitle">Programmatic entry point for clients and integrations.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Request handling</p>
+  <ol class="algo-steps">
+    <li>Accepts query requests, ingestion submissions, and job-control calls.</li>
+    <li>Validates and authorizes every request before any work is scheduled.</li>
+    <li>For fast, interactive queries, calls DuckDB service synchronously and streams rows back.</li>
+    <li>For expensive or long-running work, enqueues an Oban job and returns a job handle.</li>
+  </ol>
+</div>
+
+<div class="invariant-callout">
+  <p><strong>Key rule:</strong> The API never blocks a web process on a large scan. Either the query is small and bounded, or it becomes a job.</p>
+</div>
+
+<div class="info info-blue"><strong>Full API reference:</strong> See <a href="api.html" style="color:#1d4ed8">API Reference</a> for endpoint schemas, request/response formats, and interactive Swagger UI.</div>
+
+<h2>Query routing</h2>
+<p class="subtitle">Timeout-based fallback — no upfront cost estimation needed.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Query routing decision</p>
+  <svg viewBox="0 0 800 140" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowPhoenix" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Request -->
+    <rect x="20" y="40" width="100" height="50" rx="6" fill="#7c3aed"/>
+    <text x="70" y="62" font-size="9" fill="white" text-anchor="middle">Request</text>
+    <text x="70" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">API/LiveView</text>
+    
+    <!-- Arrow -->
+    <line x1="120" y1="65" x2="160" y2="65" stroke="#64748b" stroke-width="1" marker-end="url(#arrowPhoenix)"/>
+    
+    <!-- DuckDB call -->
+    <rect x="160" y="40" width="120" height="50" rx="6" fill="#1d4ed8"/>
+    <text x="220" y="62" font-size="9" fill="white" text-anchor="middle">DuckDB call</text>
+    <text x="220" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">timeout: 30s</text>
+    
+    <!-- Decision diamond -->
+    <polygon points="330,65 360,40 390,65 360,90" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="360" y="69" font-size="8" fill="#92400e" text-anchor="middle">complete?</text>
+    
+    <!-- Yes path -->
+    <line x1="390" y1="65" x2="440" y2="65" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowPhoenix)"/>
+    <text x="415" y="57" font-size="8" fill="#22c55e" text-anchor="middle">yes</text>
+    <rect x="440" y="40" width="100" height="50" rx="6" fill="#22c55e"/>
+    <text x="490" y="62" font-size="9" fill="white" text-anchor="middle">Stream</text>
+    <text x="490" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">results</text>
+    
+    <!-- No path -->
+    <line x1="360" y1="90" x2="360" y2="115" stroke="#ef4444" stroke-width="1.5"/>
+    <text x="370" y="105" font-size="8" fill="#ef4444">no</text>
+    <line x1="360" y1="115" x2="440" y2="115" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrowPhoenix)"/>
+    <rect x="440" y="100" width="120" height="30" rx="6" fill="#ef4444"/>
+    <text x="500" y="119" font-size="9" fill="white" text-anchor="middle">Enqueue Oban job</text>
+    
+    <!-- Arrow to handle -->
+    <line x1="560" y1="115" x2="600" y2="115" stroke="#64748b" stroke-width="1" marker-end="url(#arrowPhoenix)"/>
+    <rect x="600" y="100" width="100" height="30" rx="6" fill="#64748b"/>
+    <text x="650" y="119" font-size="9" fill="white" text-anchor="middle">Return handle</text>
+    
+    <!-- Arrow to client -->
+    <line x1="700" y1="115" x2="740" y2="115" stroke="#64748b" stroke-width="1" marker-end="url(#arrowPhoenix)"/>
+    <text x="750" y="119" font-size="9" fill="#475569">→ client</text>
+  </svg>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Routing logic</p>
+  <ol class="algo-steps">
+    <li>Phoenix calls DuckDB service synchronously with a hard timeout (default: 30s).</li>
+    <li>If query completes within timeout, results stream back directly.</li>
+    <li>If timeout fires, Phoenix kills the connection, enqueues as Oban job, returns handle.</li>
+    <li>Client receives 202 with handle, then polls or subscribes to PubSub for results.</li>
+  </ol>
+</div>
+
+<div class="info info-blue">This avoids estimating query cost upfront. DuckDB service enforces per-query memory and row limits so runaway queries fail fast. Timeout is configurable per-project.</div>
+
+<h2>LiveView</h2>
+<p class="subtitle">Interactive UI — dashboards, query builders, job monitors, dataset browsers.</p>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">Real-time updates</div>
+    <div class="body">
+      <p>Renders results pushed from the server. UI updates live as jobs progress or queries return — no polling needed.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">PubSub integration</div>
+    <div class="body">
+      <p>Subscribes to job and query events over PubSub. Running transformations and ingestions reflect live in the browser.</p>
+    </div>
+  </div>
+</div>
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">Server-side state</div>
+    <div class="body">
+      <p>Keeps per-session UI state on the server. Suits exploratory analytics where each user drives a sequence of queries.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Zero JavaScript</div>
+    <div class="body">
+      <p>LiveView eliminates the need for a separate JavaScript frontend. Server-rendered, real-time, over WebSocket.</p>
+    </div>
+  </div>
+</div>
+
+<h2>Oban</h2>
+<p class="subtitle">Job engine, backed by the same Postgres instance.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Queue configuration</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">interactive</div><div class="spec-value">Low-latency queries that timeout. Short-lived, high priority.</div></div>
+    <div class="spec-row"><div class="spec-label">ingest</div><div class="spec-value">File ingestion and promotion. Serialized per table (one writer at a time).</div></div>
+    <div class="spec-row"><div class="spec-label">transform</div><div class="spec-value">dbt model execution. Serialized per table. CPU and memory intensive.</div></div>
+    <div class="spec-row"><div class="spec-label">maintenance</div><div class="spec-value">Compaction, snapshot expiration, file cleanup. Background, lower priority.</div></div>
+  </div>
+</div>
+
+<div class="info info-green">Queues separated by cost profile so a backlog of heavy jobs never starves quick ones. Each job invokes DuckDB service, records outcome, and publishes catalog snapshot.</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Intelligence ownership — Phoenix decides WHEN</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">Compaction trigger</span><span class="spec-val">Oban cron/threshold</span><span>"File count > 100" or "daily at 2am" → enqueue compact job</span></div>
+    <div class="spec-row"><span class="spec-key">Partition suggestion</span><span class="spec-val">Ingestion worker</span><span>Analyze schema, suggest partition keys based on column types and cardinality</span></div>
+    <div class="spec-row"><span class="spec-key">Retention expiry</span><span class="spec-val">Oban cron</span><span>"Delete snapshots older than 90 days" → enqueue cleanup job</span></div>
+    <div class="spec-row"><span class="spec-key">File cleanup</span><span class="spec-val">Oban cron</span><span>"Delete staging files older than 24h" → enqueue cleanup job</span></div>
+  </div>
+</div>
+
+<div class="info info-blue">Phoenix decides <strong>when</strong> to trigger maintenance. DuckDB decides <strong>how</strong> to execute it. Postgres stores the <strong>what</strong> (file metadata, snapshot versions).</div>
+
+<h2>Auth</h2>
+<p class="subtitle">Two authentication paths, one authorization model. All auth logic lives in the control plane.</p>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-phoenix">Interactive Login</span></div>
+    <div class="body">
+      <p>Browser-based, delegates to identity providers via <a href="https://hexdocs.pm/assent" target="_blank" style="color:#7c3aed">Assent</a>. Supports Google, WorkOS, Okta, and any OAuth2/OIDC provider.</p>
+      <ul class="algo-steps">
+        <li>User clicks "Sign in with Google" → redirect to IdP</li>
+        <li>IdP authenticates → callback with auth code</li>
+        <li>Phoenix exchanges code, fetches userinfo + groups</li>
+        <li>Find or create User by email, map groups → role</li>
+        <li>Set session cookie for subsequent requests</li>
+      </ul>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-duckdb">API Tokens</span></div>
+    <div class="body">
+      <p>Programmatic access for CI, dbt runners, service accounts. Bearer tokens with bcrypt-hashed keys.</p>
+      <ul class="algo-steps">
+        <li>Client sends: <code>Authorization: Bearer pk_live_...</code></li>
+        <li>Auth plug hashes token, looks up by prefix</li>
+        <li>Attaches user + grants to connection</li>
+        <li>Authorize plug checks dataset/table permissions</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Roles</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">admin</div><div class="spec-value">Full access. Manage users, tokens, grants.</div></div>
+    <div class="spec-row"><div class="spec-label">editor</div><div class="spec-value">Read + write data. Create/drop tables. Cannot manage users.</div></div>
+    <div class="spec-row"><div class="spec-label">viewer</div><div class="spec-value">Read-only. Can run queries but not ingest.</div></div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">IdP Group → Role Mapping</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">data-admins</div><div class="spec-value">→ admin</div></div>
+    <div class="spec-row"><div class="spec-label">data-engineers</div><div class="spec-value">→ editor</div></div>
+    <div class="spec-row"><div class="spec-label">data-analysts</div><div class="spec-value">→ viewer</div></div>
+    <div class="spec-row"><div class="spec-label">(unmapped)</div><div class="spec-value">→ configurable default (usually viewer)</div></div>
+  </div>
+</div>
+
+<div class="info info-blue">Highest role wins when user belongs to multiple groups. Grants enforce dataset/table-level access regardless of auth method. See <a href="auth.html" style="color:#1d4ed8">Auth Module</a> for full design, flow diagrams, and code.</div>
+
+<h2>State in Postgres</h2>
+
+<div class="algo-card">
+  <p class="algo-card-title">App metadata owned by Phoenix</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">Users</div><div class="spec-value">Users, sessions, roles, and grants.</div></div>
+    <div class="spec-row"><div class="spec-label">Datasets</div><div class="spec-value">Dataset and table registrations — the user-facing catalog of what exists.</div></div>
+    <div class="spec-row"><div class="spec-label">History</div><div class="spec-value">Query history and results metadata.</div></div>
+    <div class="spec-row"><div class="spec-label">Jobs</div><div class="spec-value">Oban job rows and their state.</div></div>
+  </div>
+</div>
+
+<div class="info info-blue">App metadata is kept separate from — but in the same database as — the DuckLake catalog. See <a href="postgres.html" style="color:#1d4ed8">Postgres</a> for details.</div>
+
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage — Phoenix Lake</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪣</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a class="active" href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">Storage<span class="nav-desc">Pluggable Parquet storage</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Storage</h1>
+<p class="subtitle">Pluggable Parquet storage. S3, local disk, or Azure Blob — the adapter is swappable via config. Three enforced layers: staging, landing, refining, reporting.</p>
+
+<div class="stat-grid">
+  <div class="stat"><span class="num">3</span><span class="label">Storage backends</span></div>
+  <div class="stat"><span class="num">3</span><span class="label">Enforced layers</span></div>
+  <div class="stat"><span class="num">∞</span><span class="label">Storage scale</span></div>
+  <div class="stat"><span class="num">0</span><span class="label">Coordination overhead</span></div>
+</div>
+
+<!-- ==================== STORAGE ADAPTER ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#065f46;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">1</span>
+  Storage Adapter
+</h2>
+<p class="subtitle">Storage is pluggable. The DuckDB service talks to a storage interface — the implementation is swappable via environment variable.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Adapter pattern — storage is interchangeable</p>
+  <svg viewBox="0 0 800 220" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowAdapter" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+      </marker>
+    </defs>
+
+    <!-- DuckDB -->
+    <rect x="20" y="70" width="160" height="80" rx="8" fill="#1d4ed8"/>
+    <text x="100" y="100" font-size="12" fill="white" text-anchor="middle" font-weight="600">DuckDB</text>
+    <text x="100" y="118" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">reads / writes Parquet</text>
+    <text x="100" y="133" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">via httpfs extension</text>
+
+    <!-- Arrow -->
+    <line x1="180" y1="110" x2="250" y2="110" stroke="#64748b" stroke-width="2" marker-end="url(#arrowAdapter)"/>
+
+    <!-- Storage Interface -->
+    <rect x="250" y="55" width="140" height="110" rx="8" fill="#fff" stroke="#065f46" stroke-width="2"/>
+    <text x="320" y="78" font-size="10" fill="#065f46" text-anchor="middle" font-weight="700">STORAGE</text>
+    <text x="320" y="78" font-size="10" fill="#065f46" text-anchor="middle" font-weight="700">INTERFACE</text>
+    <line x1="265" y1="88" x2="375" y2="88" stroke="#065f46" stroke-width="1"/>
+    <text x="320" y="104" font-size="8" fill="#065f46" text-anchor="middle">read(path) → bytes</text>
+    <text x="320" y="118" font-size="8" fill="#065f46" text-anchor="middle">write(path, bytes)</text>
+    <text x="320" y="132" font-size="8" fill="#065f46" text-anchor="middle">list(prefix) → paths</text>
+    <text x="320" y="146" font-size="8" fill="#065f46" text-anchor="middle">delete(path)</text>
+
+    <!-- Arrow to implementations -->
+    <line x1="390" y1="80" x2="460" y2="45" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowAdapter)"/>
+    <line x1="390" y1="110" x2="460" y2="110" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowAdapter)"/>
+    <line x1="390" y1="140" x2="460" y2="175" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowAdapter)"/>
+
+    <!-- S3 -->
+    <rect x="460" y="20" width="140" height="50" rx="6" fill="#065f46"/>
+    <text x="530" y="42" font-size="10" fill="white" text-anchor="middle" font-weight="600">S3</text>
+    <text x="530" y="56" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">AWS S3 · MinIO · GCS · Azure</text>
+
+    <!-- Local Disk -->
+    <rect x="460" y="85" width="140" height="50" rx="6" fill="#475569"/>
+    <text x="530" y="107" font-size="10" fill="white" text-anchor="middle" font-weight="600">Local Disk</text>
+    <text x="530" y="121" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">NFS · EBS · local SSD</text>
+
+    <!-- Azure Blob -->
+    <rect x="460" y="150" width="140" height="50" rx="6" fill="#3b82f6"/>
+    <text x="530" y="172" font-size="10" fill="white" text-anchor="middle" font-weight="600">Azure Blob</text>
+    <text x="530" y="186" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">Azure Blob Storage</text>
+
+    <!-- Config label -->
+    <rect x="640" y="85" width="140" height="50" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="710" y="107" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">Config</text>
+    <text x="710" y="121" font-size="8" fill="#94a3b8" text-anchor="middle">STORAGE_BACKEND=s3</text>
+
+    <!-- Arrow config → interface -->
+    <line x1="640" y1="110" x2="390" y2="110" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4" marker-end="url(#arrowAdapter)"/>
+
+    <!-- Legend -->
+    <text x="460" y="215" font-size="7" fill="#64748b">DuckDB's httpfs extension handles S3 I/O. For local disk, DuckDB reads Parquet directly.</text>
+  </svg>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Storage backends</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">S3</span><span class="spec-val">default</span><span>AWS S3, MinIO, GCS (S3-compatible), Cloudflare R2. Production default.</span></div>
+    <div class="spec-row"><span class="spec-key">Local disk</span><span class="spec-val">dev / edge</span><span>NFS, EBS, local SSD. Fastest for single-node dev or edge deployments.</span></div>
+    <div class="spec-row"><span class="spec-key">Azure Blob</span><span class="spec-val">Azure</span><span>Azure Blob Storage. For teams on Azure cloud.</span></div>
+    <div class="spec-row"><span class="spec-key">Config</span><span class="spec-val">env var</span><span><code>STORAGE_BACKEND=s3|local|azure</code> + <code>STORAGE_PATH=...</code></span></div>
+  </div>
+</div>
+
+<div class="info info-blue">DuckDB's <code>httpfs</code> extension handles S3 I/O natively. For local disk, DuckDB reads Parquet files directly — no extension needed. The adapter pattern is at the path resolution layer, not the I/O layer.</div>
+
+<!-- ==================== THREE-LAYER TEMPLATE ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">2</span>
+  Three-Layer Template
+</h2>
+<p class="subtitle">Immutable Parquet across three enforced layers. Users choose what to put in it, not the structure.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Data flow through storage layers</p>
+  <svg viewBox="0 0 800 120" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowS3" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+
+    <!-- Staging -->
+    <rect x="20" y="30" width="140" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+    <text x="90" y="55" font-size="12" fill="#92400e" font-weight="600" text-anchor="middle">Staging</text>
+    <text x="90" y="72" font-size="9" fill="#92400e" text-anchor="middle">Plain prefix</text>
+
+    <!-- Arrow -->
+    <line x1="160" y1="60" x2="200" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowS3)"/>
+    <text x="180" y="52" font-size="8" fill="#64748b" text-anchor="middle">ingest</text>
+
+    <!-- Landing -->
+    <rect x="200" y="30" width="140" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+    <text x="270" y="55" font-size="12" fill="#1e40af" font-weight="600" text-anchor="middle">Landing</text>
+    <text x="270" y="72" font-size="9" fill="#1e40af" text-anchor="middle">Raw, validated</text>
+
+    <!-- Arrow -->
+    <line x1="340" y1="60" x2="380" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowS3)"/>
+    <text x="360" y="52" font-size="8" fill="#64748b" text-anchor="middle">dbt</text>
+
+    <!-- Refining -->
+    <rect x="380" y="30" width="140" height="60" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2"/>
+    <text x="450" y="55" font-size="12" fill="#6d28d9" font-weight="600" text-anchor="middle">Refining</text>
+    <text x="450" y="72" font-size="9" fill="#6d28d9" text-anchor="middle">Transformed</text>
+
+    <!-- Arrow -->
+    <line x1="520" y1="60" x2="560" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowS3)"/>
+    <text x="540" y="52" font-size="8" fill="#64748b" text-anchor="middle">materialize</text>
+
+    <!-- Reporting -->
+    <rect x="560" y="30" width="140" height="60" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+    <text x="630" y="55" font-size="12" fill="#065f46" font-weight="600" text-anchor="middle">Reporting</text>
+    <text x="630" y="72" font-size="9" fill="#065f46" text-anchor="middle">Aggregations</text>
+
+    <!-- Arrow to consumers -->
+    <line x1="700" y1="60" x2="740" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowS3)"/>
+    <text x="760" y="64" font-size="9" fill="#475569">→ consumers</text>
+  </svg>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Layer purposes</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">Staging</span><span class="spec-val">landing zone</span><span>Plain prefix. Producers drop files here; ingestion worker reads and promotes. Cleaned up after promotion.</span></div>
+    <div class="spec-row"><span class="spec-key">Landing</span><span class="spec-val">raw data</span><span>Raw but validated data. Source of truth for incoming data. Readers query directly for raw analytics.</span></div>
+    <div class="spec-row"><span class="spec-key">Refining</span><span class="spec-val">transformed</span><span>dbt models read from landing, apply joins/filters/business logic, write here.</span></div>
+    <div class="spec-row"><span class="spec-key">Reporting</span><span class="spec-val">aggregations</span><span>Materialized aggregations for dashboards. Refreshed on schedule.</span></div>
+  </div>
+</div>
+
+<!-- ==================== LAYOUT PRINCIPLES ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#3b82f6;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">3</span>
+  Layout Principles
+</h2>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">Partition wisely</div>
+    <div class="body">
+      <p>Partition by columns queries filter on — typically date and a small number of high-selectivity dimensions. Good partitioning lets DuckDB prune most files before reading any bytes.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Right-size files</div>
+    <div class="body">
+      <p>Aim for 100MB–1GB files. Many tiny files destroy scan throughput; too many large files hurt parallelism. Compaction fixes this.</p>
+    </div>
+  </div>
+</div>
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">Immutable files</div>
+    <div class="body">
+      <p>Updates and deletes produce new files and a new snapshot rather than mutating existing objects. This makes snapshots, time travel, and concurrent reads safe.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Decoupled from compute</div>
+    <div class="body">
+      <p>Storage scales independently of compute. Many DuckDB processes can read the same Parquet concurrently with no coordination.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SNAPSHOTS & CLEANUP ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">4</span>
+  Snapshots & Cleanup
+</h2>
+
+<div class="algo-card">
+  <p class="algo-card-title">Lifecycle</p>
+  <ol class="algo-steps">
+    <li>Each published snapshot references a specific set of files. Older snapshots keep referencing their older files, enabling time travel.</li>
+    <li>A retention policy expires old snapshots. Once no live snapshot references a file, a cleanup job deletes it.</li>
+    <li>Cleanup is always catalog-driven: a file is deleted only after the catalog confirms nothing points at it.</li>
+    <li>Staging files are cleaned up by the ingestion worker after promotion or on a TTL-based sweep.</li>
+    <li>Each database can have independent retention — landing may keep 90 days while reporting keeps 30.</li>
+  </ol>
+</div>
+
+<div class="info info-green">Storage is cheap and scalable. Data volume grows independently of compute. No coordination overhead between readers — they each read immutable files.</div>
+
+<!-- ==================== DESIGN DECISIONS ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#0f172a;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
+  Design Decisions
+</h2>
+
+<div class="algo-card">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead>
+      <tr style="border-bottom:2px solid #e2e8f0;">
+        <th style="text-align:left;padding:8px;color:#64748b;width:30px;">#</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Issue</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Decision</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Why</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#ef4444;">D1</td>
+        <td style="padding:8px;">S3-only vs pluggable storage</td>
+        <td style="padding:8px;">Pluggable via adapter</td>
+        <td style="padding:8px;color:#64748b;">Supports S3, local disk, Azure Blob. Same Parquet files work everywhere.</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#f59e0b;">D2</td>
+        <td style="padding:8px;">Catalog in SQL vs object-store manifests</td>
+        <td style="padding:8px;">SQL (Postgres)</td>
+        <td style="padding:8px;color:#64748b;">ACID transactions, point-in-time recovery, familiar tooling.</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#3b82f6;">D3</td>
+        <td style="padding:8px;">Three databases vs one with schemas</td>
+        <td style="padding:8px;">Three DuckLake databases</td>
+        <td style="padding:8px;color:#64748b;">Independent retention, compaction, and access control per layer.</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;font-weight:600;color:#22c55e;">D4</td>
+        <td style="padding:8px;">File size target</td>
+        <td style="padding:8px;">100MB–1GB per file</td>
+        <td style="padding:8px;color:#64748b;">Small enough to prune, large enough to scan. Compaction enforces this.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== REFERENCES ==================== -->
+<div class="related">
+  <span class="related-label">References</span>
+  <div class="related-grid">
+    <a href="https://duckdb.org/docs/extensions/ducklake.html" class="related-link" target="_blank">
+      <span class="name">DuckLake Extension</span>
+      <span class="desc">DuckDB catalog-backed table format</span>
+    </a>
+    <a href="https://duckdb.org/docs/extensions/httpfs.html" class="related-link" target="_blank">
+      <span class="name">httpfs Extension</span>
+      <span class="desc">HTTP/S3 file access for DuckDB</span>
+    </a>
+    <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/05-s3-storage.md" class="related-link" target="_blank">
+      <span class="name">Full Design Doc</span>
+      <span class="desc">05-s3-storage.md</span>
+    </a>
+  </div>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default', themeVariables: { primaryColor: '#ede9fe', primaryTextColor: '#1e1b4b', primaryBorderColor: '#7c3aed', lineColor: '#64748b', secondaryColor: '#dbeafe', tertiaryColor: '#f0fdf4', noteBkgColor: '#fef3c7', noteTextColor: '#92400e', noteBorderColor: '#f59e0b' } });</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

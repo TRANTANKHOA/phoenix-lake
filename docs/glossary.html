@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glossary — Phoenix Lake</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Glossary</h1>
+<p class="subtitle">Core concepts and technology choices with trade-offs.</p>
+
+<div class="glossary-list">
+
+<div class="glossary-item">
+  <div class="glossary-term">ACID <a href="https://en.wikipedia.org/wiki/ACID" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Atomicity, Consistency, Isolation, Durability.</div>
+  <div class="glossary-why"><strong>Why here:</strong> Transactional consistency between data writes and catalog updates is the core invariant — either a snapshot is published or nothing is visible.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">BEAM <a href="https://www.erlang.org/doc/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">The Erlang/Elixir virtual machine. Excels at concurrency, messaging, and I/O; deliberately prevents one task from monopolising the machine.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> Millions of concurrent connections, hot code upgrades, fault tolerance.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Not suited for CPU-bound analytical scans — which is why DuckDB is isolated from it.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> BEAM handles the control plane's concurrency; DuckDB handles the data plane's CPU work.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">DuckDB <a href="https://duckdb.org/docs/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Embedded analytical SQL engine. One-writer, many-readers, single-process. Scans Parquet, joins, and aggregates in memory.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> Fastest single-node analytical engine; no separate server to manage; native Parquet and DuckLake support.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Single-writer per database; can't shuffle across machines; concurrency bounded by RAM.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Perfect for workloads where one machine's RAM is enough — which is most small-to-mid analytics.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">DuckLake <a href="https://ducklake.select/docs/stable/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Lakehouse table format storing metadata in a SQL database and data as Parquet on object storage. Provides snapshots, ACID with snapshot isolation, and schema evolution.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> No separate catalog server; metadata latency drops from seconds to milliseconds; snapshots are cheap transactional rows.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Young ecosystem; third-party connectors (Spark, Trino, Athena) are work-in-progress; Iceberg has broader interop today.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> When DuckDB is the primary engine and cross-engine interop isn't required.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Elixir / Phoenix <a href="https://hexdocs.pm/phoenix/Phoenix.html" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Functional language and web framework built on the BEAM. Phoenix provides HTTP, WebSockets, LiveView for real-time UI, and the control-plane API.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> Real-time UI with LiveView; Oban for reliable background jobs; excellent concurrency model; fault tolerance.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Smaller ecosystem than Node.js/Python; not suited for heavy computation.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Control plane owns orchestration, not computation — Elixir's strengths align perfectly.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Landing</div>
+  <div class="glossary-def">First DuckLake database. Holds raw, validated data promoted from staging by the ingestion worker.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Source of truth for incoming data; all dbt models source from here via <code>source()</code>.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Materialize</div>
+  <div class="glossary-def">Process of refreshing pre-computed aggregations or reports from source tables on a schedule.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Reporting layer uses materialized views for dashboards — read-optimized, refreshed via Oban jobs.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">MVCC <a href="https://en.wikipedia.org/wiki/Multiversion_concurrency_control" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Multi-Version Concurrency Control. DuckDB uses MVCC with optimistic concurrency control to allow concurrent reads without locking.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Readers never block writers; writers never block readers — matches the "one writer, unlimited readers" invariant.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Oban <a href="https://hexdocs.pm/oban/Oban.html" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Background job framework for Elixir, backed by Postgres. Schedules work, controls concurrency, retries on failure, and persists jobs across restarts.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> ACID-backed persistence; queue-based concurrency control; built-in retry and scheduling; Oban Pro adds workflows and rate limiting.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Requires Postgres; not a distributed task queue like Celery.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Serializes writers to one-per-table; queues split by cost profile (interactive, ingest, transform). Tells DuckDB what to do and when.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Parquet <a href="https://parquet.apache.org/docs/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Columnar file format optimised for analytical queries. Immutable once written; the unit of data in DuckLake.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> Columnar storage enables predicate pushdown; compression; widely supported.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Small files hurt scan throughput (compaction needed); immutable so updates produce new files.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Immutable files enable snapshot isolation — readers always see a consistent version.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Partition pruning <a href="https://ducklake.select/docs/stable/duckdb/advanced_features/partitioning" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">DuckDB reads partition metadata to skip files that don't match query filters, avoiding full-table scans.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> A 10 TB table may touch only a few GB per query — this is what keeps single-node scans fast.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Phoenix <a href="https://hexdocs.pm/phoenix/Phoenix.html" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Elixir web framework. Provides HTTP, WebSockets, LiveView for real-time UI, and the control-plane API.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> LiveView eliminates JavaScript for real-time features; channels for PubSub; strong security defaults.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Serves the API, LiveView UI, and orchestrates Oban jobs — the control plane's front door.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Postgres <a href="https://www.postgresql.org/docs/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">App metadata + three DuckLake catalogs (landing, refining, reporting). One database — transactions, snapshots, file lists, Oban jobs.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> ACID transactions; mature ecosystem; DuckLake's first-class catalog database; Oban backend.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Single instance for both app metadata and catalogs — backup/recovery covers both.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Catalog update happens in the same transaction as data write — no window where files exist but catalog doesn't.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">PubSub <a href="https://hexdocs.pm/phoenix_pubsub/Phoenix.PubSub.html" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Phoenix publish-subscribe system. Broadcasts events (job completion, query results) to LiveView processes and API consumers.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> LiveView updates in real-time when jobs complete or queries return — no polling needed.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Refining</div>
+  <div class="glossary-def">Second DuckLake database. Holds transformed and enriched data written by dbt models or DuckDB transformation jobs.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Intermediate layer between raw landing and consumer-facing reporting — business logic lives here.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Reporting</div>
+  <div class="glossary-def">Third DuckLake database. Holds materialized aggregations and pre-computed results for dashboards and downstream consumers.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Read-optimized layer for dashboards — refreshes via scheduled Oban jobs, readers always see latest snapshot.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">S3 <a href="https://docs.aws.amazon.com/s3/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">Object storage for Parquet data files. Enforced staging prefix for incoming files, plus three enforced DuckLake databases.</div>
+  <div class="glossary-pros"><strong>Pros:</strong> Effectively infinite storage; cost scales independently of compute; immutability by default.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Eventually consistent (but DuckLake handles this via catalog).</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Storage decoupled from compute — many DuckDB processes can read the same Parquet concurrently.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Snapshot <a href="https://ducklake.select/docs/stable/duckdb/usage/snapshots" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">A commit to DuckLake that captures a consistent state of the database. Contains a changeset describing table creations, data inserts, deletes, and schema alterations.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Cheap to create (a few rows in metadata); enables time travel and consistent reads during writes.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Staging</div>
+  <div class="glossary-def">A plain S3 prefix for incoming files. Not a DuckLake database. The ingestion worker reads from here and promotes to landing.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Decouples file delivery from ingestion — producers drop files, worker validates and promotes.</div>
+</div>
+
+<div class="glossary-item">
+  <div class="glossary-term">Write-then-publish <a href="https://ducklake.select/docs/stable/duckdb/advanced_features/transactions" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
+  <div class="glossary-def">The core invariant: write immutable Parquet to S3 first, then publish via a Postgres transaction. Readers always see a consistent snapshot.</div>
+  <div class="glossary-why"><strong>Why:</strong> Files are immutable; publication is transactional — no partial writes, no inconsistent state. Concurrency reduces to one writer per table, unlimited readers.</div>
+</div>
+
+</div>
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

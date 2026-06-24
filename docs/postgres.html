@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Postgres — Phoenix Lake</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐘</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a class="active" href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Postgres & DuckLake Catalog</h1>
+<p class="subtitle">One Postgres instance serves two roles: app metadata and the DuckLake catalog. Keeping them together is a deliberate simplification.</p>
+
+<div class="stat-grid">
+  <div class="stat"><span class="num">1</span><span class="label">Postgres instance</span></div>
+  <div class="stat"><span class="num">2</span><span class="label">Logical roles</span></div>
+  <div class="stat"><span class="num">3</span><span class="label">DuckLake databases</span></div>
+  <div class="stat"><span class="num">0</span><span class="label">Separate catalog services</span></div>
+</div>
+
+<!-- ==================== TWO ROLES ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#7c3aed;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">1</span>
+  Two Roles, One Database
+</h2>
+
+<div class="diagram">
+  <p class="diagram-title">One Postgres, two logical concerns</p>
+  <svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowPg" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+      </marker>
+      <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#7c3aed"/>
+      </marker>
+      <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#1d4ed8"/>
+      </marker>
+      <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#065f46"/>
+      </marker>
+    </defs>
+
+    <!-- Postgres box -->
+    <rect x="220" y="20" width="360" height="160" rx="10" fill="#fff" stroke="#be185d" stroke-width="2"/>
+    <text x="400" y="42" font-size="12" fill="#be185d" text-anchor="middle" font-weight="700">POSTGRES</text>
+    <text x="400" y="56" font-size="8" fill="#94a3b8" text-anchor="middle">PostgreSQL 16 · single instance</text>
+
+    <!-- App metadata -->
+    <rect x="240" y="70" width="150" height="95" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="315" y="90" font-size="9" fill="#6d28d9" text-anchor="middle" font-weight="600">App Metadata</text>
+    <text x="315" y="108" font-size="7" fill="#6d28d9" text-anchor="middle">Users, sessions, roles</text>
+    <text x="315" y="122" font-size="7" fill="#6d28d9" text-anchor="middle">Grants, datasets, tables</text>
+    <text x="315" y="136" font-size="7" fill="#6d28d9" text-anchor="middle">Query history, results</text>
+    <text x="315" y="150" font-size="7" fill="#7c3aed" text-anchor="middle">Oban job rows</text>
+
+    <!-- DuckLake catalog -->
+    <rect x="410" y="70" width="150" height="95" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="485" y="90" font-size="9" fill="#1d4ed8" text-anchor="middle" font-weight="600">DuckLake Catalog</text>
+    <text x="485" y="108" font-size="7" fill="#1d4ed8" text-anchor="middle">Table definitions + schemas</text>
+    <text x="485" y="122" font-size="7" fill="#1d4ed8" text-anchor="middle">Snapshot versions</text>
+    <text x="485" y="136" font-size="7" fill="#1d4ed8" text-anchor="middle">Parquet file lists + stats</text>
+    <text x="485" y="150" font-size="7" fill="#3b82f6" text-anchor="middle">Partition info for pruning</text>
+
+    <!-- Phoenix (left) -->
+    <rect x="20" y="75" width="120" height="45" rx="6" fill="#7c3aed"/>
+    <text x="80" y="96" font-size="9" fill="white" text-anchor="middle" font-weight="600">Phoenix</text>
+    <text x="80" y="110" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">reads app metadata</text>
+
+    <!-- Arrow: Phoenix → Postgres -->
+    <line x1="140" y1="97" x2="240" y2="97" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrowPurple)"/>
+
+    <!-- DuckDB (right) -->
+    <rect x="660" y="75" width="120" height="45" rx="6" fill="#1d4ed8"/>
+    <text x="720" y="96" font-size="9" fill="white" text-anchor="middle" font-weight="600">DuckDB</text>
+    <text x="720" y="110" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">reads catalog</text>
+
+    <!-- Arrow: DuckDB ← Postgres -->
+    <line x1="560" y1="97" x2="660" y2="97" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+    <text x="610" y="90" font-size="7" fill="#1d4ed8" text-anchor="middle">reads</text>
+
+    <!-- Workers (bottom center) -->
+    <rect x="280" y="200" width="240" height="28" rx="4" fill="#065f46"/>
+    <text x="400" y="218" font-size="8" fill="white" text-anchor="middle">Oban Workers → DuckDB → commits catalog</text>
+
+    <!-- Arrow: Workers → DuckDB -->
+    <line x1="400" y1="200" x2="720" y2="120" stroke="#065f46" stroke-width="1" stroke-dasharray="3" marker-end="url(#arrowGreen)"/>
+
+    <!-- Legend -->
+    <rect x="20" y="240" width="8" height="8" rx="1" fill="#7c3aed"/>
+    <text x="34" y="248" font-size="7" fill="#7c3aed">Phoenix reads app metadata</text>
+    <rect x="200" y="240" width="8" height="8" rx="1" fill="#1d4ed8"/>
+    <text x="214" y="248" font-size="7" fill="#1d4ed8">DuckDB reads catalog</text>
+    <rect x="380" y="240" width="8" height="8" rx="1" fill="#065f46"/>
+    <text x="394" y="248" font-size="7" fill="#065f46">Workers commit via DuckDB</text>
+  </svg>
+</div>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">App metadata</div>
+    <div class="body">
+      <p>Read and written by Phoenix on every request and job:</p>
+      <ul style="font-size:12px;color:#475569;margin:8px 0;padding-left:16px;line-height:1.8;">
+        <li>Users, sessions, roles, grants</li>
+        <li>Dataset/table registrations</li>
+        <li>Query history and results metadata</li>
+        <li>Oban job rows</li>
+      </ul>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">DuckLake catalog</div>
+    <div class="body">
+      <p>Lakehouse metadata stored in SQL, not object-store manifests:</p>
+      <ul style="font-size:12px;color:#475569;margin:8px 0;padding-left:16px;line-height:1.8;">
+        <li>Table definitions and schema evolution</li>
+        <li>Snapshot versions</li>
+        <li>Parquet file lists and statistics</li>
+        <li>Partition information for pruning</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCHEMA ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#7c3aed;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">2</span>
+  App Schema
+</h2>
+<p class="subtitle">Phoenix-owned tables. DuckLake catalog tables are managed internally by the extension — not visible to Phoenix.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Users & Auth</p>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">users <span style="font-weight:400;color:#94a3b8;font-size:11px;">— auth</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>email</code> :string — unique, indexed</div>
+      <div><code>name</code> :string — from IdP or admin</div>
+      <div><code>role</code> :enum — admin | editor | viewer</div>
+      <div><code>provider</code> :string — google | workos | okta | local</div>
+      <div><code>provider_uid</code> :string — IdP's unique user ID</div>
+      <div><code>active</code> :boolean — default: true</div>
+    </div>
+  </details>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">tokens <span style="font-weight:400;color:#94a3b8;font-size:11px;">— auth</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>key_hash</code> :string — bcrypt hash, never plaintext</div>
+      <div><code>key_prefix</code> :string — first 8 chars for lookup</div>
+      <div><code>name</code> :string — "CI pipeline", "dbt runner"</div>
+      <div><code>scopes</code> :array — ["read", "write"]</div>
+      <div><code>expires_at</code> :utc_datetime — optional expiration</div>
+      <div><code>user_id</code> : FK → users</div>
+    </div>
+  </details>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">grants <span style="font-weight:400;color:#94a3b8;font-size:11px;">— auth</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>database</code> :string — "landing", "refining", "reporting", or <code>*</code></div>
+      <div><code>table</code> :string — table name or <code>*</code> for all</div>
+      <div><code>permission</code> :enum — read | write | admin</div>
+      <div><code>user_id</code> : FK → users</div>
+    </div>
+  </details>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Dataset & Table Registry</p>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">datasets <span style="font-weight:400;color:#94a3b8;font-size:11px;">— registry</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>name</code> :string — unique display name</div>
+      <div><code>description</code> :text — optional</div>
+      <div><code>database</code> :enum — landing | refining | reporting</div>
+      <div><code>created_by</code> : FK → users</div>
+    </div>
+  </details>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">tables <span style="font-weight:400;color:#94a3b8;font-size:11px;">— registry</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>dataset_id</code> : FK → datasets</div>
+      <div><code>table_name</code> :string — unique per dataset</div>
+      <div><code>schema_json</code> :jsonb — column definitions</div>
+      <div><code>row_count</code> :bigint — last known count</div>
+      <div><code>size_bytes</code> :bigint — last known size</div>
+      <div><code>updated_at</code> :timestamp</div>
+    </div>
+  </details>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Query & Results Metadata</p>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">query_history <span style="font-weight:400;color:#94a3b8;font-size:11px;">— audit</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>user_id</code> : FK → users</div>
+      <div><code>sql</code> :text — submitted SQL</div>
+      <div><code>database</code> :string — target database</div>
+      <div><code>status</code> :enum — pending | running | completed | failed</div>
+      <div><code>duration_ms</code> :integer</div>
+      <div><code>row_count</code> :bigint</div>
+      <div><code>started_at</code> :timestamp</div>
+      <div><code>completed_at</code> :timestamp</div>
+    </div>
+  </details>
+  <details style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">query_results <span style="font-weight:400;color:#94a3b8;font-size:11px;">— metadata</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>query_id</code> : FK → query_history</div>
+      <div><code>result_url</code> :string — S3 presigned URL to Parquet</div>
+      <div><code>column_types</code> :jsonb — column type info</div>
+      <div><code>row_count</code> :bigint</div>
+      <div><code>size_bytes</code> :bigint</div>
+      <div style="margin-top:4px;color:#22c55e;font-size:11px;">Actual data lives in S3, not Postgres.</div>
+    </div>
+  </details>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Oban (built-in)</p>
+  <details open style="margin:4px 0;">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">oban_jobs <span style="font-weight:400;color:#94a3b8;font-size:11px;">— queue</span></summary>
+    <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
+      <div><code>queue</code> :string — ingest | transform | maintenance</div>
+      <div><code>state</code> :enum — available | executing | completed | retryable</div>
+      <div><code>args</code> :jsonb — job arguments</div>
+      <div><code>errors</code> :jsonb — error history</div>
+      <div><code>attempts</code> :integer</div>
+      <div><code>scheduled_at</code> :timestamp</div>
+      <div style="margin-top:4px;color:#94a3b8;font-size:11px;">Managed by Oban library. Unique constraint on project_id for transform queue.</div>
+    </div>
+  </details>
+</div>
+
+<div class="info info-green">No overlap with DuckLake catalog. DuckLake manages its own internal tables (snapshots, data_files, etc.) — Phoenix never reads or writes them directly. Clean separation.</div>
+
+<!-- ==================== THREE DATABASES ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#3b82f6;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">3</span>
+  Three DuckLake Databases
+</h2>
+<p class="subtitle">Created automatically by the platform for every project.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Database creation</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>CREATE DATABASE landing   (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/landing/');
+CREATE DATABASE refining  (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/refining/');
+CREATE DATABASE reporting (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/reporting/');</code></pre>
+</div>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-s3">Landing</span></div>
+    <div class="body">
+      <p>Raw, validated data. Written only by the ingestion worker. Phoenix reads from it but treats it as owned by the data plane.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-duckdb">Refining</span></div>
+    <div class="body">
+      <p>Transformed and enriched data. Written by dbt models and materialization jobs. Phoenix reads from it for query results and UI display.</p>
+    </div>
+  </div>
+</div>
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-phoenix">Reporting</span></div>
+    <div class="body">
+      <p>Materialized aggregations for dashboards. Scheduled Oban jobs or dbt external materializations refresh these on a cadence.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Isolation</div>
+    <div class="body">
+      <p>Each database has independent snapshot retention, compaction policies, and access control. A bad dbt run in one database cannot corrupt another.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SNAPSHOT FLOW ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#22c55e;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">3</span>
+  Snapshot Lifecycle
+</h2>
+<p class="subtitle">How data moves from staging to committed snapshot.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Write-then-publish invariant</p>
+  <div class="mermaid">
+sequenceDiagram
+    participant Oban as Oban Worker (Phoenix)
+    participant LB as Load Balancer
+    participant DuckDB as DuckDB Service
+    participant Storage as S3 / Local
+    participant Postgres
+
+    Oban->>LB: 1. submit SQL (COPY INTO, etc.)
+    LB->>DuckDB: 2. route to container
+    DuckDB->>Storage: 3. write Parquet files
+    Storage-->>DuckDB: files persisted
+
+    DuckDB->>Postgres: 4. BEGIN transaction
+    DuckDB->>Postgres: 5. insert file refs into catalog
+    DuckDB->>Postgres: 6. create new snapshot (version N+1)
+    DuckDB->>Postgres: 7. update registry (row_count, size_bytes)
+    Postgres-->>DuckDB: COMMIT
+
+    DuckDB-->>LB: 8. success
+    LB-->>Oban: 9. job complete
+  </div>
+</div>
+
+<div class="invariant-callout">
+  <p><strong>Write-then-publish.</strong> Parquet files are written to S3 first, then the catalog is updated in a single Postgres transaction. Readers see either the old snapshot or the new one — never a partial state.</p>
+</div>
+
+<!-- ==================== WHY ONE POSTGRES ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#be185d;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">4</span>
+  Why One Postgres
+</h2>
+
+<div class="info info-blue">No separate catalog service to deploy, secure, back up, and keep consistent. Backups, point-in-time recovery, and access control are solved once, for all roles, by Postgres.</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Advantages</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">Transaction consistency</span><span class="spec-val">ACID</span><span>Catalog update is one Postgres transaction — never orphaned files or phantom snapshots.</span></div>
+    <div class="spec-row"><span class="spec-key">No extra service</span><span class="spec-val">−1 component</span><span>No Glue, no standalone metastore to deploy and maintain.</span></div>
+    <div class="spec-row"><span class="spec-key">Backup</span><span class="spec-val">pg_dump / PITR</span><span>One backup strategy covers both app metadata and catalog.</span></div>
+    <div class="spec-row"><span class="spec-key">Access control</span><span class="spec-val">Postgres roles</span><span>Same RBAC for app tables and catalog tables.</span></div>
+  </div>
+</div>
+
+<!-- ==================== SNAPSHOTS & CLEANUP ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
+  Snapshots & Cleanup
+</h2>
+
+<div class="algo-card">
+  <p class="algo-card-title">Lifecycle</p>
+  <ol class="algo-steps">
+    <li>Each published snapshot references a specific set of files. Older snapshots keep referencing their older files, enabling time travel.</li>
+    <li>A retention policy expires old snapshots. Once no live snapshot references a file, a cleanup job deletes it from storage.</li>
+    <li>Cleanup is always catalog-driven: a file is deleted only after the catalog confirms nothing points at it.</li>
+    <li>Staging files are cleaned up by the ingestion worker after promotion or on a TTL-based sweep.</li>
+    <li>Each database can have independent retention — landing may keep 90 days while reporting keeps 30.</li>
+  </ol>
+</div>
+
+<!-- ==================== OWNERSHIP RULES ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">6</span>
+  Ownership Rules
+</h2>
+
+<div class="info info-blue">No separate catalog service to deploy, secure, back up, and keep consistent. Backups, point-in-time recovery, and access control are solved once, for all roles, by Postgres.</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Advantages</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">Transaction consistency</span><span class="spec-val">ACID</span><span>Catalog update is one Postgres transaction — never orphaned files or phantom snapshots.</span></div>
+    <div class="spec-row"><span class="spec-key">No extra service</span><span class="spec-val">−1 component</span><span>No Glue, no standalone metastore to deploy and maintain.</span></div>
+    <div class="spec-row"><span class="spec-key">Backup</span><span class="spec-val">pg_dump / PITR</span><span>One backup strategy covers both app metadata and catalog.</span></div>
+    <div class="spec-row"><span class="spec-key">Access control</span><span class="spec-val">Postgres roles</span><span>Same RBAC for app tables and catalog tables.</span></div>
+  </div>
+</div>
+
+<!-- ==================== OWNERSHIP ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
+  Ownership Rules
+</h2>
+
+<div class="algo-card">
+  <p class="algo-card-title">Who writes what</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">Landing</span><span class="spec-val">Ingestion worker</span><span>Phoenix reads but doesn't write.</span></div>
+    <div class="spec-row"><span class="spec-key">Refining</span><span class="spec-val">dbt / materialization</span><span>Phoenix reads for queries and UI.</span></div>
+    <div class="spec-row"><span class="spec-key">Reporting</span><span class="spec-val">Scheduled refresh</span><span>Phoenix reads for dashboards.</span></div>
+    <div class="spec-row"><span class="spec-key">App tables</span><span class="spec-val">Phoenix only</span><span>Never touched by DuckDB.</span></div>
+  </div>
+</div>
+
+<!-- ==================== MATURITY ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">6</span>
+  Maturity Caveat
+</h2>
+
+<div class="info info-yellow">DuckLake's catalog format is young. Third-party connectors (Spark, Trino, DataFusion) are emerging but most are work-in-progress. Native reads from Athena, Snowflake, and BigQuery aren't there yet. For broad multi-engine interop, Iceberg remains more mature.</div>
+
+<!-- ==================== REGISTRY SYNC ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">8</span>
+  Registry Sync
+</h2>
+<p class="subtitle">How DuckLake catalog and Phoenix registry stay consistent.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Write-through sync — same Postgres transaction</p>
+  <div class="mermaid">
+sequenceDiagram
+    participant DuckDB as DuckDB Service
+    participant Postgres
+
+    DuckDB->>Postgres: BEGIN transaction
+    DuckDB->>Postgres: UPDATE ducklake_catalog (internal)
+    DuckDB->>Postgres: INSERT/UPDATE phoenix_registry (app tables)
+    Postgres-->>DuckDB: COMMIT
+
+    Note over DuckDB,Postgres: Atomic — both succeed or both fail
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Sync triggers</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">CREATE TABLE</span><span class="spec-val">DDL</span><span>DuckDB service inserts into datasets + tables registry after DuckLake catalog update.</span></div>
+    <div class="spec-row"><span class="spec-key">INSERT / COPY</span><span class="spec-val">DML</span><span>Optionally update tables.row_count and tables.size_bytes after snapshot commit.</span></div>
+    <div class="spec-row"><span class="spec-key">DROP TABLE</span><span class="spec-val">DDL</span><span>Soft-delete from registry (set deleted_at). DuckLake catalog handles file cleanup.</span></div>
+    <div class="spec-row"><span class="spec-key">ALTER TABLE</span><span class="spec-val">DDL</span><span>Update tables.schema_json with new column definitions.</span></div>
+  </div>
+</div>
+
+<div class="info info-blue">Same Postgres connection, same transaction. No polling, no events, no eventual consistency. The DuckDB service already connects to Postgres for DuckLake — it writes to both catalog and registry in one atomic commit.</div>
+
+<!-- ==================== QUERY COST ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">9</span>
+  Query Cost Capture
+</h2>
+<p class="subtitle">DuckDB exposes query metrics after execution. Capture them in query_history.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Metrics available from DuckDB</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">duration_ms</span><span class="spec-val">wall clock</span><span>End - start timestamp. Primary cost metric.</span></div>
+    <div class="spec-row"><span class="spec-key">rows_scanned</span><span class="spec-val">I/O</span><span>Total rows read from Parquet files (before filtering).</span></div>
+    <div class="spec-row"><span class="spec-key">rows_returned</span><span class="spec-val">output</span><span>Rows in final result set.</span></div>
+    <div class="spec-row"><span class="spec-key">bytes_scanned</span><span class="spec-val">I/O</span><span>Bytes read from storage. Direct proxy for S3 cost.</span></div>
+    <div class="spec-row"><span class="spec-key">cpu_time_us</span><span class="spec-val">compute</span><span>CPU microseconds. Useful for comparing query efficiency.</span></div>
+    <div class="spec-row"><span class="spec-key">memory_peak_bytes</span><span class="spec-val">memory</span><span>Peak memory during execution. Detects OOM risk.</span></div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">How to capture</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">Option A</span><span class="spec-val">Post-exec query</span><span><code>SELECT * FROM duckdb_query_metrics()</code> after each query. DuckDB returns metrics for the last executed query.</span></div>
+    <div class="spec-row"><span class="spec-key">Option B</span><span class="spec-val">Profile callback</span><span>Use DuckDB's <code>PRAGMA profiling_mode='detailed'</code> + <code>PRAGMA profiling_output='...'</code> to capture structured output.</span></div>
+    <div class="spec-row"><span class="spec-key">Option C</span><span class="spec-val">Axum middleware</span><span>Wrap query execution with timing + stats collection in Rust. Most control, no extra queries.</span></div>
+  </div>
+</div>
+
+<div class="info info-green">Recommendation: Option C (Axum middleware). The DuckDB service already wraps query execution — add timing + stats capture there. No extra Postgres round-trips. Store in query_history on the same connection.</div>
+
+<!-- ==================== DESIGN DECISIONS ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#0f172a;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">10</span>
+  Design Decisions
+</h2>
+
+<div class="algo-card">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead>
+      <tr style="border-bottom:2px solid #e2e8f0;">
+        <th style="text-align:left;padding:8px;color:#64748b;width:30px;">#</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Issue</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Decision</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Why</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#ef4444;">D1</td>
+        <td style="padding:8px;">One Postgres vs separate catalog service</td>
+        <td style="padding:8px;">One Postgres for both</td>
+        <td style="padding:8px;color:#64748b;">Transaction consistency between data and catalog. Fewer components to deploy.</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#f59e0b;">D2</td>
+        <td style="padding:8px;">DuckLake vs Iceberg catalog</td>
+        <td style="padding:8px;">DuckLake</td>
+        <td style="padding:8px;color:#64748b;">Native DuckDB integration, simpler setup. Tradeoff: less ecosystem maturity.</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#3b82f6;">D3</td>
+        <td style="padding:8px;">Three databases vs one with schemas</td>
+        <td style="padding:8px;">Three DuckLake databases</td>
+        <td style="padding:8px;color:#64748b;">Independent retention, compaction, and access control per layer.</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;font-weight:600;color:#22c55e;">D4</td>
+        <td style="padding:8px;">Catalog in SQL vs object-store manifests</td>
+        <td style="padding:8px;">SQL (Postgres)</td>
+        <td style="padding:8px;color:#64748b;">ACID transactions, point-in-time recovery, familiar tooling.</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#ec4899;">D5</td>
+        <td style="padding:8px;">Registry sync: polling vs write-through</td>
+        <td style="padding:8px;">Write-through, same transaction</td>
+        <td style="padding:8px;color:#64748b;">DuckDB service writes to both DuckLake catalog and Phoenix registry in one Postgres transaction. No polling, no events, no eventual consistency.</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#f59e0b;">D6</td>
+        <td style="padding:8px;">Query cost: extra query vs middleware</td>
+        <td style="padding:8px;">Axum middleware in DuckDB service</td>
+        <td style="padding:8px;color:#64748b;">Capture timing + DuckDB stats in the Rust execution wrapper. No extra Postgres round-trips. Store in query_history.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== REFERENCES ==================== -->
+<div class="related">
+  <span class="related-label">References</span>
+  <div class="related-grid">
+    <a href="https://duckdb.org/docs/extensions/ducklake.html" class="related-link" target="_blank">
+      <span class="name">DuckLake Extension</span>
+      <span class="desc">DuckDB catalog-backed table format</span>
+    </a>
+    <a href="https://www.postgresql.org/docs/16/" class="related-link" target="_blank">
+      <span class="name">PostgreSQL 16 Docs</span>
+      <span class="desc">Official Postgres documentation</span>
+    </a>
+    <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/04-postgres-ducklake.md" class="related-link" target="_blank">
+      <span class="name">Full Design Doc</span>
+      <span class="desc">04-postgres-ducklake.md</span>
+    </a>
+  </div>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default', themeVariables: { primaryColor: '#ede9fe', primaryTextColor: '#1e1b4b', primaryBorderColor: '#7c3aed', lineColor: '#64748b', secondaryColor: '#dbeafe', tertiaryColor: '#f0fdf4', noteBkgColor: '#fef3c7', noteTextColor: '#92400e', noteBorderColor: '#f59e0b' } });</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

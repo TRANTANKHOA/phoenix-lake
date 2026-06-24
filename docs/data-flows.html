@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Flows — Phoenix Lake</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a class="active" href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Data Flows</h1>
+<p class="subtitle">Three flows exercise the whole system. Each follows the same invariant.</p>
+
+<div class="invariant-callout">
+  <p><strong>Write-then-publish invariant:</strong> Write immutable Parquet to S3 first, then publish via a Postgres transaction. Readers always see a consistent snapshot — never a partial write.</p>
+</div>
+
+<!-- ==================== INGESTION ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">1</span>
+  Ingestion
+</h2>
+<p class="subtitle">Append-only. Data cleaning happens in dbt, not here.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Ingestion flow</p>
+  <svg viewBox="0 0 800 180" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowIngest" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Producer -->
+    <rect x="20" y="50" width="100" height="60" rx="8" fill="#64748b"/>
+    <text x="70" y="75" font-size="10" fill="white" text-anchor="middle" font-weight="500">Producer</text>
+    <text x="70" y="92" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">drop files</text>
+    
+    <!-- Arrow -->
+    <line x1="120" y1="80" x2="160" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowIngest)"/>
+    
+    <!-- Staging -->
+    <rect x="160" y="50" width="100" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+    <text x="210" y="75" font-size="10" fill="#92400e" text-anchor="middle" font-weight="500">Staging</text>
+    <text x="210" y="92" font-size="8" fill="#92400e" text-anchor="middle">s3://staging/</text>
+    
+    <!-- Arrow -->
+    <line x1="260" y1="80" x2="300" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowIngest)"/>
+    <text x="280" y="72" font-size="8" fill="#64748b" text-anchor="middle">validate</text>
+    
+    <!-- DuckDB -->
+    <rect x="300" y="50" width="120" height="60" rx="8" fill="#1d4ed8"/>
+    <text x="360" y="75" font-size="10" fill="white" text-anchor="middle" font-weight="500">DuckDB</text>
+    <text x="360" y="92" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">promote + partition</text>
+    
+    <!-- Arrow -->
+    <line x1="420" y1="80" x2="460" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowIngest)"/>
+    
+    <!-- S3 Landing -->
+    <rect x="460" y="50" width="100" height="60" rx="8" fill="#065f46"/>
+    <text x="510" y="75" font-size="10" fill="white" text-anchor="middle" font-weight="500">S3 Landing</text>
+    <text x="510" y="92" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">write Parquet</text>
+    
+    <!-- Arrow -->
+    <line x1="560" y1="80" x2="600" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowIngest)"/>
+    
+    <!-- Postgres -->
+    <rect x="600" y="50" width="100" height="60" rx="8" fill="#be185d"/>
+    <text x="650" y="75" font-size="10" fill="white" text-anchor="middle" font-weight="500">Postgres</text>
+    <text x="650" y="92" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">publish snapshot</text>
+    
+    <!-- PubSub -->
+    <line x1="700" y1="80" x2="740" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowIngest)"/>
+    <rect x="740" y="55" width="50" height="50" rx="25" fill="#7c3aed"/>
+    <text x="765" y="84" font-size="9" fill="white" text-anchor="middle">PubSub</text>
+  </svg>
+</div>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">File conventions</div>
+    <div class="body">
+      <p><strong>Path:</strong> <code>s3://&lt;bucket&gt;/staging/&lt;table&gt;/</code></p>
+      <p><strong>Name:</strong> <code>&lt;YYYYMMDD&gt;_&lt;HHMMSS&gt;_&lt;uuid4&gt;.parquet</code></p>
+      <p>Non-conforming names tolerated. Timestamp extracted from Parquet metadata if needed.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Guarantees</div>
+    <div class="body">
+      <p><strong>Dedup:</strong> UUID + Oban uniqueness + catalog check</p>
+      <p><strong>Schema:</strong> Field identifiers allow different schemas per file</p>
+      <p><strong>Idempotent:</strong> Same file processed twice → same result</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== QUERY ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#1d4ed8;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">2</span>
+  Query
+</h2>
+<p class="subtitle">Timeout-based routing — no upfront cost estimation.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Query routing</p>
+  <svg viewBox="0 0 800 160" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowQuery" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Client -->
+    <rect x="20" y="50" width="80" height="50" rx="6" fill="#64748b"/>
+    <text x="60" y="72" font-size="9" fill="white" text-anchor="middle">Client</text>
+    <text x="60" y="86" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">request</text>
+    
+    <!-- Arrow -->
+    <line x1="100" y1="75" x2="140" y2="75" stroke="#64748b" stroke-width="1" marker-end="url(#arrowQuery)"/>
+    
+    <!-- Phoenix -->
+    <rect x="140" y="50" width="90" height="50" rx="6" fill="#7c3aed"/>
+    <text x="185" y="72" font-size="9" fill="white" text-anchor="middle">Phoenix</text>
+    <text x="185" y="86" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">authorize</text>
+    
+    <!-- Arrow -->
+    <line x1="230" y1="75" x2="270" y2="75" stroke="#64748b" stroke-width="1" marker-end="url(#arrowQuery)"/>
+    
+    <!-- DuckDB -->
+    <rect x="270" y="50" width="100" height="50" rx="6" fill="#1d4ed8"/>
+    <text x="320" y="72" font-size="9" fill="white" text-anchor="middle">DuckDB</text>
+    <text x="320" y="86" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">timeout: 30s</text>
+    
+    <!-- Decision -->
+    <polygon points="410,75 440,55 470,75 440,95" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="440" y="79" font-size="8" fill="#92400e" text-anchor="middle">done?</text>
+    
+    <!-- Yes path -->
+    <line x1="470" y1="75" x2="510" y2="75" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowQuery)"/>
+    <text x="490" y="67" font-size="8" fill="#22c55e" text-anchor="middle">yes</text>
+    <rect x="510" y="55" width="80" height="40" rx="6" fill="#22c55e"/>
+    <text x="550" y="72" font-size="9" fill="white" text-anchor="middle">Stream</text>
+    <text x="550" y="86" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">results</text>
+    
+    <!-- No path -->
+    <line x1="440" y1="95" x2="440" y2="120" stroke="#ef4444" stroke-width="1"/>
+    <text x="450" y="112" font-size="8" fill="#ef4444">no</text>
+    <line x1="440" y1="120" x2="510" y2="120" stroke="#ef4444" stroke-width="1" marker-end="url(#arrowQuery)"/>
+    <rect x="510" y="105" width="100" height="30" rx="6" fill="#ef4444"/>
+    <text x="560" y="124" font-size="9" fill="white" text-anchor="middle">Oban job</text>
+    
+    <!-- Arrow to client -->
+    <line x1="590" y1="75" x2="630" y2="75" stroke="#64748b" stroke-width="1" marker-end="url(#arrowQuery)"/>
+    <text x="640" y="79" font-size="9" fill="#475569">→ client</text>
+    
+    <!-- Arrow from Oban -->
+    <line x1="610" y1="120" x2="630" y2="120" stroke="#64748b" stroke-width="1" marker-end="url(#arrowQuery)"/>
+    <text x="640" y="124" font-size="9" fill="#475569">→ PubSub</text>
+  </svg>
+</div>
+
+<div class="stat-grid" style="grid-template-columns: repeat(3, 1fr);">
+  <div class="stat">
+    <span class="num" style="font-size:16px;">≤30s</span>
+    <span class="label">Sync timeout</span>
+  </div>
+  <div class="stat">
+    <span class="num" style="font-size:16px;">202</span>
+    <span class="label">Async response</span>
+  </div>
+  <div class="stat">
+    <span class="num" style="font-size:16px;">∞</span>
+    <span class="label">Concurrent reads</span>
+  </div>
+</div>
+
+<!-- ==================== TRANSFORMATION ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#8b5cf6;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">3</span>
+  Transformation (dbt)
+</h2>
+<p class="subtitle">Git-synced models. User writes SQL; platform handles execution.</p>
+
+<div class="diagram">
+  <p class="diagram-title">dbt transformation flow</p>
+  <svg viewBox="0 0 800 120" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowDbt" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Trigger -->
+    <rect x="20" y="30" width="100" height="60" rx="8" fill="#64748b"/>
+    <text x="70" y="55" font-size="9" fill="white" text-anchor="middle" font-weight="500">Trigger</text>
+    <text x="70" y="72" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">git / cron / manual</text>
+    
+    <!-- Arrow -->
+    <line x1="120" y1="60" x2="160" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowDbt)"/>
+    
+    <!-- Oban -->
+    <rect x="160" y="30" width="80" height="60" rx="8" fill="#be185d"/>
+    <text x="200" y="55" font-size="9" fill="white" text-anchor="middle" font-weight="500">Oban</text>
+    <text x="200" y="72" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">transform q</text>
+    
+    <!-- Arrow -->
+    <line x1="240" y1="60" x2="280" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowDbt)"/>
+    
+    <!-- DuckDB -->
+    <rect x="280" y="30" width="120" height="60" rx="8" fill="#1d4ed8"/>
+    <text x="340" y="55" font-size="9" fill="white" text-anchor="middle" font-weight="500">DuckDB</text>
+    <text x="340" y="72" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">dbt run</text>
+    
+    <!-- Arrow from Landing -->
+    <path d="M 340 90 L 340 110 L 180 110 L 180 90" stroke="#f59e0b" stroke-width="1" fill="none" marker-end="url(#arrowDbt)"/>
+    <rect x="120" y="100" width="120" height="20" rx="4" fill="#fef3c7"/>
+    <text x="180" y="114" font-size="8" fill="#92400e" text-anchor="middle">source() from landing</text>
+    
+    <!-- Arrow to Refining -->
+    <line x1="400" y1="60" x2="440" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowDbt)"/>
+    
+    <!-- S3 Refining -->
+    <rect x="440" y="30" width="100" height="60" rx="8" fill="#8b5cf6"/>
+    <text x="490" y="55" font-size="9" fill="white" text-anchor="middle" font-weight="500">S3 Refining</text>
+    <text x="490" y="72" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">write Parquet</text>
+    
+    <!-- Arrow -->
+    <line x1="540" y1="60" x2="580" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowDbt)"/>
+    
+    <!-- Postgres -->
+    <rect x="580" y="30" width="100" height="60" rx="8" fill="#be185d"/>
+    <text x="630" y="55" font-size="9" fill="white" text-anchor="middle" font-weight="500">Postgres</text>
+    <text x="630" y="72" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">snapshot</text>
+    
+    <!-- Arrow -->
+    <line x1="680" y1="60" x2="720" y2="60" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowDbt)"/>
+    <rect x="720" y="35" width="60" height="50" rx="25" fill="#7c3aed"/>
+    <text x="750" y="64" font-size="9" fill="white" text-anchor="middle">PubSub</text>
+  </svg>
+</div>
+
+<div class="info info-blue">dbt models source from <code>landing</code>, write to <code>refining</code> or <code>reporting</code>. Each model write publishes a new DuckLake snapshot — same write-then-publish invariant as ingestion.</div>
+
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

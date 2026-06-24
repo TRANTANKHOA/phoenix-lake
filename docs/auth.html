@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auth Module — Phoenix Lake</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a class="active" href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Auth Module</h1>
+<p class="subtitle">Two authentication paths, one authorization model. All auth logic lives in the control plane — DuckDB never sees unauthenticated requests.</p>
+
+<div class="stat-grid">
+  <div class="stat"><span class="num">2</span><span class="label">Auth paths</span></div>
+  <div class="stat"><span class="num">3</span><span class="label">Roles</span></div>
+  <div class="stat"><span class="num">3</span><span class="label">IdP providers</span></div>
+  <div class="stat"><span class="num">0</span><span class="label">Auth in DuckDB</span></div>
+</div>
+
+<!-- ==================== ARCHITECTURE ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#7c3aed;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">1</span>
+  Architecture
+</h2>
+
+<div class="diagram">
+  <p class="diagram-title">Two auth paths, one authorization model</p>
+  <div class="mermaid">
+sequenceDiagram
+    box rgb(255,251,235) Identity Provider
+    participant IdP
+    end
+
+    box rgb(237,233,254) Phoenix Auth
+    participant Browser
+    participant Phoenix
+    participant Authorize
+    end
+
+    participant DuckDB
+    participant Postgres
+
+    rect rgb(237,233,254)
+        Note over Browser,IdP: Path 1: Interactive (OAuth2 / OIDC)
+        Browser->>Phoenix: GET /auth/google
+        Phoenix->>IdP: Assent.authorize_url
+        IdP-->>Phoenix: 302 redirect
+        Phoenix-->>Browser: 302 → IdP login
+        Browser->>IdP: User authenticates
+        IdP-->>Phoenix: GET /auth/google/callback?code=...
+        Phoenix->>IdP: Assent.callback (exchange code)
+        IdP-->>Phoenix: tokens + userinfo
+        Phoenix->>Phoenix: find_or_create_user<br/>groups → role mapping
+        Phoenix-->>Browser: session cookie
+    end
+
+    rect rgb(219,234,254)
+        Note over Browser,Phoenix: Path 2: API Token (Bearer)
+        Browser->>Phoenix: POST /v1/query<br/>Authorization: Bearer pk_live_...
+        Phoenix->>Phoenix: extract token<br/>bcrypt hash → prefix lookup<br/>attach user + grants
+    end
+
+    rect rgb(240,253,244)
+        Note over Authorize,Postgres: Shared Authorization
+        Phoenix->>Authorize: (user, database, table, permission)
+        Authorize->>Postgres: check grants
+        Postgres-->>Authorize: grants[]
+        alt authorized
+            Authorize-->>Phoenix: ✓ proceed
+            Phoenix->>DuckDB: scoped query (no auth)
+            DuckDB-->>Phoenix: results
+            Phoenix-->>Browser: 200 OK
+        else denied
+            Authorize-->>Phoenix: ✗ deny
+            Phoenix-->>Browser: 403 Forbidden
+        end
+    end
+  </div>
+</div>
+
+<div class="invariant-callout">
+  <p><strong>Security invariant:</strong> DuckDB trusts the control plane completely. It only receives pre-authorized, table-scoped requests. All auth logic lives in Phoenix — one boundary, enforced once.</p>
+</div>
+
+<!-- ==================== INTERACTIVE LOGIN ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#7c3aed;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">2</span>
+  Interactive Login (IdP)
+</h2>
+<p class="subtitle">Browser-based. Delegates to Google, WorkOS, or Okta via <a href="https://hexdocs.pm/assent" target="_blank" style="color:#7c3aed">Assent</a>.</p>
+
+<div class="diagram">
+  <p class="diagram-title">OAuth2 / OIDC flow with Assent</p>
+  <div class="mermaid">
+sequenceDiagram
+    box rgb(237,233,254) Phoenix Control Plane
+    participant Browser
+    participant Phoenix
+    end
+    box rgb(255,251,235) External
+    participant IdP
+    end
+    participant Postgres
+
+    Browser->>Phoenix: 1. GET /auth/google
+    Phoenix->>IdP: 2. Assent.authorize_url()
+    IdP-->>Phoenix: authorize_url + state
+    Phoenix-->>Browser: 3. 302 redirect → IdP
+
+    Browser->>IdP: 4. User authenticates
+    IdP-->>Browser: 302 redirect → callback
+
+    Browser->>Phoenix: 5. GET /auth/google/callback?code=...&state=...
+    Phoenix->>IdP: 6. Assent.callback(code)
+    IdP-->>Phoenix: access_token + userinfo
+
+    Phoenix->>Postgres: 7. find_or_create_user(email, provider_uid)
+    Postgres-->>Phoenix: user
+
+    Phoenix->>Postgres: 8. fetch groups / directory sync
+    Postgres-->>Phoenix: groups[]
+
+    Phoenix->>Phoenix: 9. map groups → role<br/>(data-admins→admin, data-engineers→editor, data-analysts→viewer)
+
+    Phoenix->>Postgres: 10. upsert session
+    Phoenix-->>Browser: Set-Cookie: session=... (SameSite=Strict)
+  </div>
+</div>
+
+<!-- ==================== API TOKEN ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#3b82f6;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">3</span>
+  API Token Authentication
+</h2>
+<p class="subtitle">Programmatic access. Bearer tokens with bcrypt-hashed keys.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Token validation and grant check</p>
+  <div class="mermaid">
+sequenceDiagram
+    box rgb(100,116,139) Client
+    participant SDK as SDK / CLI
+    end
+    box rgb(237,233,254) Phoenix
+    participant AuthPlug as Auth Plug
+    participant AuthzPlug as Authorize Plug
+    participant Controller
+    end
+    participant Postgres
+    participant DuckDB
+
+    SDK->>AuthPlug: POST /v1/query<br/>Authorization: Bearer pk_live_...
+
+    rect rgb(237,233,254)
+        Note over AuthPlug: Token validation
+        AuthPlug->>AuthPlug: 1. extract token from header
+        AuthPlug->>Postgres: 2. SELECT * FROM tokens<br/>WHERE key_prefix = prefix
+        Postgres-->>AuthPlug: token row (key_hash, user_id, scopes)
+        AuthPlug->>AuthPlug: 3. Bcrypt.verify(token, key_hash)
+        AuthPlug->>AuthPlug: 4. check expires_at (if set)
+        alt valid + not expired
+            AuthPlug->>AuthPlug: 5. update last_used_at<br/>attach user + grants to conn
+        else invalid, expired, or missing
+            AuthPlug-->>SDK: 401 Unauthorized
+        end
+    end
+
+    rect rgb(240,253,244)
+        Note over AuthzPlug: Authorization check
+        AuthzPlug->>AuthzPlug: 1. extract database + table from body
+        AuthzPlug->>Postgres: 2. check grants<br/>(user_id, db, table, permission)
+        Postgres-->>AuthzPlug: grants[]
+        AuthzPlug->>AuthzPlug: 3. match role + permission
+        alt authorized
+            AuthzPlug->>Controller: 4. proceed
+        else denied
+            AuthzPlug-->>SDK: 403 Forbidden
+        end
+    end
+
+    Controller->>DuckDB: scoped query (no auth)
+    DuckDB-->>Controller: results
+    Controller-->>SDK: 200 OK
+  </div>
+</div>
+
+<!-- ==================== SCHEMAS ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#1d4ed8;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">4</span>
+  Schemas
+</h2>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-phoenix">User</span></div>
+    <div class="body">
+      <div class="spec-rows" style="margin:0;">
+        <div class="spec-row"><span class="spec-key">email</span><span class="spec-val">:string</span><span>unique, indexed</span></div>
+        <div class="spec-row"><span class="spec-key">name</span><span class="spec-val">:string</span><span>from IdP or admin</span></div>
+        <div class="spec-row"><span class="spec-key">role</span><span class="spec-val">enum</span><span>admin | editor | viewer</span></div>
+        <div class="spec-row"><span class="spec-key">provider</span><span class="spec-val">:string</span><span>google | workos | okta | local</span></div>
+        <div class="spec-row"><span class="spec-key">provider_uid</span><span class="spec-val">:string</span><span>IdP's unique user ID</span></div>
+        <div class="spec-row"><span class="spec-key">active</span><span class="spec-val">:boolean</span><span>default: true</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head"><span class="component-badge badge-duckdb">Token (API Keys)</span></div>
+    <div class="body">
+      <div class="spec-rows" style="margin:0;">
+        <div class="spec-row"><span class="spec-key">key_hash</span><span class="spec-val">:string</span><span>bcrypt — never plaintext</span></div>
+        <div class="spec-row"><span class="spec-key">key_prefix</span><span class="spec-val">:string</span><span>first 8 chars for lookup</span></div>
+        <div class="spec-row"><span class="spec-key">name</span><span class="spec-val">:string</span><span>"CI pipeline", "dbt runner"</span></div>
+        <div class="spec-row"><span class="spec-key">scopes</span><span class="spec-val">:array</span><span>["read", "write"]</span></div>
+        <div class="spec-row"><span class="spec-key">expires_at</span><span class="spec-val">:utc_datetime</span><span>optional expiration</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Grant</p>
+  <div class="spec-rows" style="margin:0;">
+    <div class="spec-row"><span class="spec-key">database</span><span class="spec-val">:string</span><span>"landing", "refining", "reporting", or <code>*</code></span></div>
+    <div class="spec-row"><span class="spec-key">table</span><span class="spec-val">:string</span><span>table name or <code>*</code> for all tables</span></div>
+    <div class="spec-row"><span class="spec-key">permission</span><span class="spec-val">enum</span><span>read | write | admin</span></div>
+  </div>
+</div>
+
+<div class="info info-green">Wildcard examples: <code>database: "*", table: "*"</code> → full access. <code>database: "landing", table: "orders"</code> → only orders in landing.</div>
+
+<!-- ==================== ROLES ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#22c55e;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
+  Roles &amp; IdP Mapping
+</h2>
+
+<div class="decision-grid">
+  <div class="decision-card use">
+    <div class="icon">🔑</div>
+    <h4>admin</h4>
+    <ul>
+      <li>Full access to all databases and tables</li>
+      <li>Manage users, tokens, grants</li>
+      <li>Map from IdP group: <code>data-admins</code></li>
+    </ul>
+  </div>
+  <div class="decision-card" style="background:#eff6ff;border:2px solid #3b82f6;">
+    <div class="icon">✏️</div>
+    <h4 style="color:#1d4ed8;">editor</h4>
+    <ul>
+      <li>Read + write data across databases</li>
+      <li>Create/drop tables, ingest data</li>
+      <li>Map from IdP group: <code>data-engineers</code></li>
+    </ul>
+  </div>
+  <div class="decision-card" style="background:#f8fafc;border:2px solid #94a3b8;">
+    <div class="icon">👁️</div>
+    <h4 style="color:#475569;">viewer</h4>
+    <ul>
+      <li>Read-only access via grants</li>
+      <li>Run queries, browse datasets</li>
+      <li>Map from IdP group: <code>data-analysts</code></li>
+    </ul>
+  </div>
+  <div class="decision-card" style="background:#fefce8;border:2px solid #eab308;">
+    <div class="icon">⚙️</div>
+    <h4 style="color:#92400e;">default_role</h4>
+    <ul>
+      <li>Applied to unmapped IdP users</li>
+      <li>Configurable per provider</li>
+      <li>Usually <code>viewer</code></li>
+    </ul>
+  </div>
+</div>
+
+<div class="info info-blue">Multiple groups? Highest role wins: admin > editor > viewer. Mapping is configurable per provider in <code>config/runtime.exs</code>.</div>
+
+<!-- ==================== PROVIDERS ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">6</span>
+  Supported Providers
+</h2>
+
+<div class="card-grid">
+  <div class="card" style="border-left:3px solid #4285f4;">
+    <p class="card-title">Google</p>
+    <p class="card-desc">OAuth2 via <code>Assent.Strategy.Google</code>. Groups from Admin SDK or directory sync.</p>
+  </div>
+  <div class="card" style="border-left:3px solid #6366f1;">
+    <p class="card-title">WorkOS</p>
+    <p class="card-desc">SSO via <code>Assent.Strategy.OAuth2</code>. SAML + OIDC connections. Groups from WorkOS directory.</p>
+  </div>
+  <div class="card" style="border-left:3px solid #007dc1;">
+    <p class="card-title">Okta</p>
+    <p class="card-desc">OIDC via <code>Assent.Strategy.OIDC</code>. Groups from Okta app assignment or directory.</p>
+  </div>
+  <div class="card" style="border-left:3px solid #64748b;">
+    <p class="card-title">Custom</p>
+    <p class="card-desc">Any OAuth2/OIDC provider via Assent base strategies. Implement <code>normalize/2</code>.</p>
+  </div>
+</div>
+
+<!-- ==================== SECURITY ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#ef4444;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">7</span>
+  Security Properties
+</h2>
+
+<div class="spec-rows">
+  <div class="spec-row"><span class="spec-key">Token secrecy</span><span class="spec-val">Hash stored</span><span>Key hash in DB; prefix only for identification</span></div>
+  <div class="spec-row"><span class="spec-key">Token revocation</span><span class="spec-val">Delete row</span><span>Next request fails immediately</span></div>
+  <div class="spec-row"><span class="spec-key">Session security</span><span class="spec-val">Secure cookie</span><span>SameSite=Strict, server-side session</span></div>
+  <div class="spec-row"><span class="spec-key">PKCE</span><span class="spec-val">Assent built-in</span><span>Prevents OAuth2 code interception</span></div>
+  <div class="spec-row"><span class="spec-key">No token in logs</span><span class="spec-val">Plug strips</span><span>Authorization header removed before logging</span></div>
+  <div class="spec-row"><span class="spec-key">Audit trail</span><span class="spec-val">Per request</span><span>user_id + token_id + auth_method logged</span></div>
+  <div class="spec-row"><span class="spec-key">Rate limiting</span><span class="spec-val">Per token</span><span>PlugAttack or Oban-based</span></div>
+  <div class="spec-row"><span class="spec-key">DuckDB isolation</span><span class="spec-val">No auth</span><span>DuckDB receives only pre-authorized, table-scoped requests</span></div>
+</div>
+
+<!-- ==================== REFERENCES ==================== -->
+<div class="related">
+  <span class="related-label">References</span>
+  <div class="related-grid">
+    <a href="https://hexdocs.pm/assent" class="related-link" target="_blank">
+      <span class="name">Assent Docs</span>
+      <span class="desc">Multi-provider OAuth2/OIDC library for Elixir</span>
+    </a>
+    <a href="https://workos.com/docs/sso" class="related-link" target="_blank">
+      <span class="name">WorkOS SSO</span>
+      <span class="desc">SAML/OIDC middleware for enterprise SSO</span>
+    </a>
+    <a href="https://openid.net/specs/openid-connect-core-1_0.html" class="related-link" target="_blank">
+      <span class="name">OIDC Core 1.0</span>
+      <span class="desc">OpenID Connect specification</span>
+    </a>
+    <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/AUTH_MODULE.md" class="related-link" target="_blank">
+      <span class="name">Full Design Doc</span>
+      <span class="desc">AUTH_MODULE.md — schemas, plugs, migrations, code</span>
+    </a>
+  </div>
+</div>
+
+<!-- ==================== DESIGN DECISIONS ==================== -->
+<h2 style="display:flex;align-items:center;gap:8px;">
+  <span style="background:#0f172a;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">8</span>
+  Design Decisions
+</h2>
+
+<div class="algo-card">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead>
+      <tr style="border-bottom:2px solid #e2e8f0;">
+        <th style="text-align:left;padding:8px;color:#64748b;width:30px;">#</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Issue</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Decision</th>
+        <th style="text-align:left;padding:8px;color:#64748b;">Why</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#ef4444;">D1</td>
+        <td style="padding:8px;"><code>hash_pwd_salt</code> generates new salt each call</td>
+        <td style="padding:8px;">Prefix lookup → <code>Bcrypt.verify_pass</code></td>
+        <td style="padding:8px;color:#64748b;">Prefix narrows to 1 row; verify is constant-time</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#f59e0b;">D2</td>
+        <td style="padding:8px;"><code>expires_at</code> not checked</td>
+        <td style="padding:8px;">Check after bcrypt; reject if past</td>
+        <td style="padding:8px;color:#64748b;">Tokens revocable by time</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#3b82f6;">D3</td>
+        <td style="padding:8px;">WorkOS OAuth2 vs OIDC</td>
+        <td style="padding:8px;">Keep <code>Assent.Strategy.OAuth2</code></td>
+        <td style="padding:8px;color:#64748b;">Simpler, no OIDC discovery needed</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#f59e0b;">D4</td>
+        <td style="padding:8px;">Google doesn't return groups in userinfo</td>
+        <td style="padding:8px;">Admin SDK at login, or Oban sync</td>
+        <td style="padding:8px;color:#64748b;">Real-time vs eventual consistency tradeoff</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;font-weight:600;color:#22c55e;">D5</td>
+        <td style="padding:8px;">No token usage visibility</td>
+        <td style="padding:8px;">Add <code>last_used_at</code>, update on validation</td>
+        <td style="padding:8px;color:#64748b;">Audit trail, cleanup, security monitoring</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;font-weight:600;color:#ef4444;">D6</td>
+        <td style="padding:8px;">Concurrent OAuth logins race on insert</td>
+        <td style="padding:8px;"><code>on_conflict: :nothing</code> + unique index</td>
+        <td style="padding:8px;color:#64748b;">Race-safe, no duplicates</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/AUTH_MODULE.md">architecture/AUTH_MODULE.md</a> · Phoenix Lake</p>
+</footer>
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default', themeVariables: { primaryColor: '#ede9fe', primaryTextColor: '#1e1b4b', primaryBorderColor: '#7c3aed', lineColor: '#64748b', secondaryColor: '#dbeafe', tertiaryColor: '#f0fdf4', noteBkgColor: '#fef3c7', noteTextColor: '#92400e', noteBorderColor: '#f59e0b' } });</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deployment — Phoenix Lake</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a class="active" href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>Deployment</h1>
+<p class="subtitle">Phoenix Lake supports multiple deployment modes — from local development to production on AWS.</p>
+
+<h2>Deployment modes</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <p class="card-title"><span class="component-badge badge-phoenix">Local</span> Docker Compose</p>
+    <p class="card-desc">Fastest path to a running system. All components in containers on one machine. Best for development and demos.</p>
+  </div>
+  <div class="card">
+    <p class="card-title"><span class="component-badge badge-duckdb">Dev/Prod</span> Kubernetes</p>
+    <p class="card-desc">Helm charts for self-managed clusters. Auto-scaling, rolling updates, service discovery. Best for teams running their own K8s.</p>
+  </div>
+  <div class="card">
+    <p class="card-title"><span class="component-badge badge-postgres">Production</span> AWS</p>
+    <p class="card-desc">Managed services: ECS/EKS, RDS, S3. Auto-scaling, backups, IAM. Best for production workloads on AWS.</p>
+  </div>
+</div>
+
+<h2>Docker Compose (local)</h2>
+<p class="subtitle">Run everything locally with a single command.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Quick start</p>
+  <ol class="algo-steps">
+    <li>Clone the repo and run <code>docker compose up</code>.</li>
+    <li>Postgres starts with the DuckLake catalog schema auto-provisioned.</li>
+    <li>MinIO (S3-compatible) starts with the <code>phoenix-lake</code> bucket created.</li>
+    <li>DuckDB service starts and connects to Postgres and MinIO.</li>
+    <li>Phoenix app starts and connects to all services.</li>
+  </ol>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Services</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">Postgres</div><div class="spec-value">Port <code>5432</code>. User: <code>postgres</code>, password: <code>postgres</code>. Auto-creates <code>phoenix_lake_dev</code> database.</div></div>
+    <div class="spec-row"><div class="spec-label">MinIO</div><div class="spec-value">API port <code>9000</code>, console port <code>9001</code>. User: <code>minioadmin</code>. S3-compatible object storage.</div></div>
+    <div class="spec-row"><div class="spec-label">DuckDB</div><div class="spec-value">Port <code>8080</code>. Connects to Postgres (catalog) and MinIO (data). Memory limit: 4GB.</div></div>
+    <div class="spec-row"><div class="spec-label">Phoenix</div><div class="spec-value">Port <code>4000</code>. Web UI, API, Oban workers. Connects to all services.</div></div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Environment variables</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>DATABASE_URL=ecto://postgres:postgres@localhost/phoenix_lake_dev
+DUCKDB_HOST=localhost
+DUCKDB_PORT=8080
+S3_ENDPOINT=http://localhost:9000
+S3_BUCKET=phoenix-lake
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+SECRET_KEY_BASE=dev_only_secret_key_base</code></pre>
+</div>
+
+<h2>Kubernetes (Helm)</h2>
+<p class="subtitle">Deploy to any Kubernetes cluster with Helm charts.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Chart structure</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>charts/phoenix-lake/
+├── Chart.yaml
+├── values.yaml
+├── templates/
+│   ├── deployment.yaml      # Phoenix app
+│   ├── duckdb-service.yaml  # DuckDB compute
+│   ├── ingress.yaml         # HTTP routing
+│   ├── hpa.yaml             # Auto-scaling
+│   └── configmap.yaml       # Environment config</code></pre>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Install</p>
+  <ol class="algo-steps">
+    <li>Add the Helm repo: <code>helm repo add phoenix-lake https://charts.phoenix-lake.dev</code></li>
+    <li>Install: <code>helm install phoenix-lake phoenix-lake/phoenix-lake --set env=prod</code></li>
+    <li>Or from source: <code>helm install phoenix-lake ./charts/phoenix-lake</code></li>
+  </ol>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Key values</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">postgres</div><div class="spec-value">External RDS or in-cluster Postgres. Connection string via <code>DATABASE_URL</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">s3</div><div class="spec-value">Existing S3 bucket. Credentials via IAM role or secrets.</div></div>
+    <div class="spec-row"><div class="spec-label">duckdb.replicas</div><div class="spec-value">Number of DuckDB service pods. Default: 2. Auto-scales via HPA.</div></div>
+    <div class="spec-row"><div class="spec-label">duckdb.memory</div><div class="spec-value">Memory limit per DuckDB pod. Default: <code>4Gi</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">phoenix.replicas</div><div class="spec-value">Number of Phoenix pods. Default: 2. Auto-scales via HPA.</div></div>
+  </div>
+</div>
+
+<h2>AWS (ECS / EKS)</h2>
+<p class="subtitle">Production deployment on AWS using managed services.</p>
+
+<div class="diagram">
+  <p class="diagram-title">AWS deployment topology</p>
+  <svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowAWS" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+      </marker>
+    </defs>
+    
+    <!-- Users -->
+    <rect x="20" y="40" width="80" height="50" rx="6" fill="#64748b"/>
+    <text x="60" y="62" font-size="9" fill="white" text-anchor="middle">Users</text>
+    <text x="60" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">API/UI</text>
+    
+    <!-- Arrow -->
+    <line x1="100" y1="65" x2="140" y2="65" stroke="#64748b" stroke-width="1" marker-end="url(#arrowAWS)"/>
+    
+    <!-- ALB -->
+    <rect x="140" y="40" width="80" height="50" rx="6" fill="#7c3aed"/>
+    <text x="180" y="62" font-size="9" fill="white" text-anchor="middle">ALB</text>
+    <text x="180" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">HTTPS</text>
+    
+    <!-- Arrow -->
+    <line x1="220" y1="65" x2="260" y2="65" stroke="#64748b" stroke-width="1" marker-end="url(#arrowAWS)"/>
+    
+    <!-- ECS/EKS -->
+    <rect x="260" y="20" width="200" height="90" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+    <text x="360" y="40" font-size="10" fill="#1d4ed8" font-weight="600" text-anchor="middle">ECS / EKS</text>
+    
+    <!-- Phoenix tasks -->
+    <rect x="275" y="50" width="80" height="40" rx="4" fill="#7c3aed"/>
+    <text x="315" y="72" font-size="8" fill="white" text-anchor="middle">Phoenix</text>
+    <text x="315" y="84" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">x2+</text>
+    
+    <!-- DuckDB tasks -->
+    <rect x="365" y="50" width="80" height="40" rx="4" fill="#1d4ed8"/>
+    <text x="405" y="72" font-size="8" fill="white" text-anchor="middle">DuckDB</text>
+    <text x="405" y="84" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">x2-10 (HPA)</text>
+    
+    <!-- Arrows to managed services -->
+    <line x1="315" y1="90" x2="315" y2="130" stroke="#64748b" stroke-width="1" marker-end="url(#arrowAWS)"/>
+    <line x1="405" y1="90" x2="405" y2="130" stroke="#64748b" stroke-width="1" marker-end="url(#arrowAWS)"/>
+    <line x1="405" y1="90" x2="540" y2="130" stroke="#64748b" stroke-width="1" marker-end="url(#arrowAWS)"/>
+    
+    <!-- RDS -->
+    <rect x="240" y="130" width="150" height="50" rx="6" fill="#be185d"/>
+    <text x="315" y="152" font-size="9" fill="white" text-anchor="middle">RDS Postgres</text>
+    <text x="315" y="166" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">Catalog + App metadata</text>
+    
+    <!-- S3 -->
+    <rect x="460" y="130" width="120" height="50" rx="6" fill="#065f46"/>
+    <text x="520" y="152" font-size="9" fill="white" text-anchor="middle">S3</text>
+    <text x="520" y="166" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">Parquet data</text>
+    
+    <!-- ElastiCache -->
+    <rect x="620" y="130" width="120" height="50" rx="6" fill="#dc2626"/>
+    <text x="680" y="152" font-size="9" fill="white" text-anchor="middle">ElastiCache</text>
+    <text x="680" y="166" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">Optional: session</text>
+    
+    <!-- IAM -->
+    <rect x="20" y="200" width="760" height="80" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1"/>
+    <text x="40" y="220" font-size="10" fill="#92400e" font-weight="600">IAM</text>
+    <text x="40" y="240" font-size="9" fill="#475569">Phoenix role: ECS task role, RDS access, S3 read/write</text>
+    <text x="40" y="255" font-size="9" fill="#475569">DuckDB role: ECS task role, RDS read-only, S3 read/write</text>
+    <text x="40" y="270" font-size="9" fill="#475569">No hardcoded credentials — IAM roles everywhere</text>
+  </svg>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">AWS services</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">Compute</div><div class="spec-value">ECS Fargate (serverless) or EKS (self-managed K8s). Phoenix and DuckDB as separate task definitions.</div></div>
+    <div class="spec-row"><div class="spec-label">Database</div><div class="spec-value">RDS Postgres (Multi-AZ for prod). One instance, two schemas: app metadata + DuckLake catalogs.</div></div>
+    <div class="spec-row"><div class="spec-label">Storage</div><div class="spec-value">S3 for Parquet data. One bucket, three prefixes: landing/, refining/, reporting/. Lifecycle policies for cleanup.</div></div>
+    <div class="spec-row"><div class="spec-label">Networking</div><div class="spec-value">ALB for HTTPS termination. Private subnets for ECS tasks. VPC endpoints for S3 and RDS.</div></div>
+    <div class="spec-row"><div class="spec-label">IAM</div><div class="spec-value">Task roles for Phoenix (RDS + S3) and DuckDB (RDS read-only + S3). No hardcoded credentials.</div></div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Terraform (optional)</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>module "phoenix_lake" {
+  source = "./terraform/aws"
+
+  environment     = "prod"
+  vpc_id          = module.vpc.vpc_id
+  private_subnets = module.vpc.private_subnets
+  db_password     = var.db_password
+
+  # Auto-scaling
+  phoenix_min_tasks = 2
+  phoenix_max_tasks = 10
+  duckdb_min_tasks  = 2
+  duckdb_max_tasks  = 10
+}</code></pre>
+</div>
+
+<h2>Comparison</h2>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">When to use Docker Compose</div>
+    <div class="body">
+      <ul style="font-size:12px;color:#475569;margin:0;padding-left:16px;line-height:1.8;">
+        <li>Local development</li>
+        <li>Demos and prototyping</li>
+        <li>Single-developer workflows</li>
+        <li>CI/CD test environments</li>
+      </ul>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">When to use Kubernetes</div>
+    <div class="body">
+      <ul style="font-size:12px;color:#475569;margin:0;padding-left:16px;line-height:1.8;">
+        <li>Teams already running K8s</li>
+        <li>Multi-tenant deployments</li>
+        <li>Need rolling updates and canary</li>
+        <li>Self-managed infrastructure</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="split-grid" style="margin-top:12px;">
+  <div class="split-card">
+    <div class="head">When to use AWS ECS/EKS</div>
+    <div class="body">
+      <ul style="font-size:12px;color:#475569;margin:0;padding-left:16px;line-height:1.8;">
+        <li>Production workloads on AWS</li>
+        <li>Need managed services (RDS, S3)</li>
+        <li>Auto-scaling without K8s expertise</li>
+        <li>IAM-based security model</li>
+      </ul>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Common to all modes</div>
+    <div class="body">
+      <ul style="font-size:12px;color:#475569;margin:0;padding-left:16px;line-height:1.8;">
+        <li>Same Docker images</li>
+        <li>Same environment variables</li>
+        <li>Same health checks</li>
+        <li>Same observability (Prometheus/Grafana)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2>Environment configuration</h2>
+
+<p class="subtitle">All modes use the same environment variables. Only the values change.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Required variables</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">DATABASE_URL</div><div class="spec-value">Postgres connection string. <code>ecto://user:pass@host/db</code></div></div>
+    <div class="spec-row"><div class="spec-label">DUCKDB_HOST</div><div class="spec-value">DuckDB service hostname. <code>localhost</code> (compose) or service name (K8s).</div></div>
+    <div class="spec-row"><div class="spec-label">DUCKDB_PORT</div><div class="spec-value">DuckDB service port. Default: <code>8080</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">S3_BUCKET</div><div class="spec-value">S3 bucket name. <code>phoenix-lake</code></div></div>
+    <div class="spec-row"><div class="spec-label">S3_REGION</div><div class="spec-value">AWS region. <code>us-east-1</code></div></div>
+    <div class="spec-row"><div class="spec-label">SECRET_KEY_BASE</div><div class="spec-value">Phoenix secret. Generate with <code>mix phx.gen.secret</code>.</div></div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Optional variables</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">S3_ENDPOINT</div><div class="spec-value">Custom S3 endpoint (for MinIO). Not needed for AWS S3.</div></div>
+    <div class="spec-row"><div class="spec-label">S3_ACCESS_KEY</div><div class="spec-value">S3 credentials. Not needed when using IAM roles.</div></div>
+    <div class="spec-row"><div class="spec-label">S3_SECRET_KEY</div><div class="spec-value">S3 credentials. Not needed when using IAM roles.</div></div>
+    <div class="spec-row"><div class="spec-label">DUCKDB_MEMORY_LIMIT</div><div class="spec-value">Per-query memory limit. Default: <code>4GB</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">POOL_SIZE</div><div class="spec-value">Postgres connection pool size. Default: <code>10</code>.</div></div>
+  </div>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>

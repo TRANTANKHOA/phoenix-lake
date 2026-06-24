@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dbt Integration — Phoenix Lake</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="brand" href="index.html"><span>🦆</span> Phoenix Lake</a>
+  <a href="index.html">Overview</a>
+  <div class="nav-dropdown">
+    <a href="architecture.html">Design</a>
+    <div class="dropdown-menu">
+      <a href="architecture.html"><span class="nav-icon">📐</span><span class="nav-label">Architecture<span class="nav-desc">System overview, components, boundaries</span></span></a>
+      <a href="phoenix.html"><span class="nav-icon">🔮</span><span class="nav-label">Phoenix<span class="nav-desc">Control plane, API, LiveView, Oban</span></span></a>
+      <a href="duckdb-service.html"><span class="nav-icon">🦆</span><span class="nav-label">DuckDB Service<span class="nav-desc">Compute engine, queries, ingestion</span></span></a>
+      <a href="postgres.html"><span class="nav-icon">🐘</span><span class="nav-label">Postgres<span class="nav-desc">Catalogs, app metadata, DuckLake</span></span></a>
+      <a href="s3.html"><span class="nav-icon">🪣</span><span class="nav-label">S3<span class="nav-desc">Storage, staging, partitioning</span></span></a>
+      <div class="dropdown-divider"></div>
+      <a href="data-flows.html"><span class="nav-icon">🔀</span><span class="nav-label">Data Flows<span class="nav-desc">Ingestion, query, transformation</span></span></a>
+      <a href="auth.html"><span class="nav-icon">🔐</span><span class="nav-label">Auth<span class="nav-desc">Tokens, IdP, grants, roles</span></span></a>
+      <a href="ui.html"><span class="nav-icon">🖥️</span><span class="nav-label">UI Mockup<span class="nav-desc">LiveView dashboard preview</span></span></a>
+    </div>
+  </div>
+  <div class="nav-dropdown">
+    <a href="scaling.html">Build</a>
+    <div class="dropdown-menu">
+      <a href="scaling.html"><span class="nav-icon">📈</span><span class="nav-label">Scaling<span class="nav-desc">Reads, writes, boundaries</span></span></a>
+      <a class="active" href="dbt.html"><span class="nav-icon">🔄</span><span class="nav-label">dbt<span class="nav-desc">Git-synced transformations</span></span></a>
+      <a href="deployment.html"><span class="nav-icon">🚀</span><span class="nav-label">Deployment<span class="nav-desc">Docker, K8s, AWS</span></span></a>
+      <a href="api.html"><span class="nav-icon">📡</span><span class="nav-label">API Reference<span class="nav-desc">OpenAPI spec, Swagger UI</span></span></a>
+    </div>
+  </div>
+  <a href="glossary.html">Glossary</a>
+<button class="dark-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌙</button>
+</nav>
+
+<main>
+<h1>dbt Integration</h1>
+<p class="subtitle">Users bring their own dbt models via Git-synced repos. The platform provides the execution environment; the user provides the SQL.</p>
+
+<div class="diagram">
+  <p class="diagram-title">Git-synced dbt workflow</p>
+  <svg viewBox="0 0 800 180" xmlns="http://www.w3.org/2000/svg">
+    <!-- User's Repo -->
+    <rect x="20" y="30" width="140" height="120" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="90" y="55" font-size="12" fill="#1e293b" font-weight="600" text-anchor="middle">User's Repo</text>
+    <text x="90" y="75" font-size="10" fill="#64748b" text-anchor="middle">GitHub / GitLab</text>
+    <text x="90" y="100" font-size="9" fill="#475569" text-anchor="middle">dbt_project.yml</text>
+    <text x="90" y="115" font-size="9" fill="#475569" text-anchor="middle">ducklake.yml</text>
+    <text x="90" y="130" font-size="9" fill="#475569" text-anchor="middle">models/*.sql</text>
+    
+    <!-- Arrow -->
+    <line x1="170" y1="90" x2="220" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    <text x="195" y="80" font-size="9" fill="#64748b" text-anchor="middle">push</text>
+    
+    <!-- Phoenix -->
+    <rect x="220" y="30" width="120" height="120" rx="8" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1"/>
+    <text x="280" y="55" font-size="12" fill="#7c3aed" font-weight="600" text-anchor="middle">Phoenix</text>
+    <text x="280" y="75" font-size="9" fill="#475569" text-anchor="middle">validate</text>
+    <text x="280" y="90" font-size="9" fill="#475569" text-anchor="middle">enqueue job</text>
+    <text x="280" y="105" font-size="9" fill="#475569" text-anchor="middle">generate</text>
+    <text x="280" y="118" font-size="9" fill="#475569" text-anchor="middle">profiles.yml</text>
+    
+    <!-- Arrow -->
+    <line x1="350" y1="90" x2="400" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- DuckDB Worker -->
+    <rect x="400" y="30" width="140" height="120" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="1"/>
+    <text x="470" y="55" font-size="12" fill="#1d4ed8" font-weight="600" text-anchor="middle">DuckDB Worker</text>
+    <text x="470" y="75" font-size="9" fill="#475569" text-anchor="middle">clone repo</text>
+    <text x="470" y="90" font-size="9" fill="#475569" text-anchor="middle">dbt run</text>
+    <text x="470" y="105" font-size="9" fill="#475569" text-anchor="middle">write Parquet</text>
+    <text x="470" y="118" font-size="9" fill="#475569" text-anchor="middle">publish snapshot</text>
+    
+    <!-- Arrow -->
+    <line x1="550" y1="90" x2="600" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- DuckLake Databases -->
+    <rect x="600" y="30" width="180" height="120" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+    <text x="690" y="55" font-size="12" fill="#166534" font-weight="600" text-anchor="middle">DuckLake Catalogs</text>
+    <text x="690" y="80" font-size="10" fill="#475569" text-anchor="middle">landing (source)</text>
+    <text x="690" y="100" font-size="10" fill="#475569" text-anchor="middle">refining (output)</text>
+    <text x="690" y="120" font-size="10" fill="#475569" text-anchor="middle">reporting (output)</text>
+  </svg>
+</div>
+
+<div class="split-grid">
+  <div class="split-card">
+    <div class="head">User provides</div>
+    <div class="body">
+      <p>GitHub/GitLab repo with a standard dbt project: <code>dbt_project.yml</code>, <code>ducklake.yml</code>, and model SQL files.</p>
+      <p>Models source from <code>landing</code>, write to <code>refining</code> or <code>reporting</code> via <code>external</code> materialization.</p>
+    </div>
+  </div>
+  <div class="split-card">
+    <div class="head">Platform provides</div>
+    <div class="body">
+      <p>DuckDB execution, S3 credentials, DuckLake connections, <code>profiles.yml</code> generation, resource isolation, scheduling, and retry logic.</p>
+      <p>Each run executes in an isolated DuckDB process with memory and time caps.</p>
+    </div>
+  </div>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Git-synced dbt flow</p>
+  <ol class="algo-steps">
+    <li>User connects their GitHub/GitLab repo via the Phoenix UI and selects a branch.</li>
+    <li>Platform reads <code>ducklake.yml</code> from the repo root to provision databases and set retention policies.</li>
+    <li>Platform validates the dbt project against the enforced template: all sources must target <code>landing</code>, all outputs must target <code>refining</code> or <code>reporting</code>.</li>
+    <li>A git push, webhook, cron schedule, or manual trigger enqueues an Oban job on the <code>transform</code> queue.</li>
+    <li>The worker clones the repo, generates a <code>profiles.yml</code> connecting to landing, refining, and reporting databases, and runs <code>dbt run</code>.</li>
+    <li>dbt reads from landing via <code>source()</code>, transforms, and writes to refining or reporting — each model write publishes a new DuckLake snapshot.</li>
+    <li>Results are broadcast via PubSub and surfaced in the LiveView UI. Temporary files are cleaned up.</li>
+  </ol>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Template YAML — <code>ducklake.yml</code></p>
+  <p style="font-size:12px;color:#475569;margin:0 0 8px 0;">Every dbt project must include this file at the repo root. The platform reads it to provision databases and validate models.</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>layers:
+  landing:
+    description: "Raw validated data from ingestion"
+    retention_days: 90
+    partition_columns:
+      - name: year
+        expression: "year(ordered_at)"
+      - name: month
+        expression: "month(ordered_at)"
+      - name: day
+        expression: "day(ordered_at)"
+  refining:
+    description: "Transformed and enriched data"
+    retention_days: 180
+    partition_columns:
+      - name: year
+        expression: "year(ordered_at)"
+      - name: month
+        expression: "month(ordered_at)"
+  reporting:
+    description: "Materialized aggregations for consumption"
+    retention_days: 30
+    partition_columns: []</code></pre>
+</div>
+
+<div class="info info-blue"><strong>Full design:</strong> See <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/09-dbt-integration.md" style="color:#1d4ed8">09 — dbt integration</a> for project conventions, isolation, failure handling, and incremental model support.</div>
+
+<div class="info info-yellow"><strong>Database creation.</strong> The three databases (landing, refining, reporting) are created automatically by the platform at project setup. Users don't need to set up databases — they just write dbt models that target them.</div>
+</main>
+
+<footer class="site-footer">
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+</footer>
+<script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".dark-toggle").textContent = next === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+}
+(function() {
+  const saved = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = document.querySelector(".dark-toggle");
+  if (btn) btn.textContent = saved === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+})();
+</script>
+</body>
+</html>
