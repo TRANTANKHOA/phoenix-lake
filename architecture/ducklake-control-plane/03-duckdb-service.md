@@ -117,9 +117,10 @@ Oban queues use per-project uniqueness for dbt transforms:
 
 ```elixir
 queues: [
+  interactive: [limit: 8],
   ingest: [limit: 5, unique: [keys: [:table_name]]],
   transform: [
-    limit: 3,
+    limit: 2,
     unique: [
       keys: [:project_id],
       states: [:available, :scheduled, :executing, :retryable],
@@ -129,6 +130,15 @@ queues: [
   maintenance: [limit: 2]
 ]
 ```
+
+- **`interactive`** — low-latency reads that time out of the synchronous path
+  ([02](02-phoenix-app.md#query-routing)); small, fast, high priority.
+- **`ingest`** — file promotion and landing writes.
+- **`transform`** — dbt model execution; CPU/memory intensive. The limit is `2`
+  deliberately: 2 concurrent dbt runs × 2 dbt threads = 4 parallel model
+  submissions, matching the single DuckDB service's 4-thread budget without
+  oversubscribing it.
+- **`maintenance`** — compaction, snapshot expiration, file cleanup.
 
 - **Ingestion jobs**: unique by `table_name` — only one ingest per table at a time
 - **Transform jobs**: unique by `project_id` — only one dbt run per project at a time
@@ -204,11 +214,17 @@ struct DuckDBService {
 
 impl DuckDBService {
     fn new() -> Self {
-        let conn = Connection::open_in_memory_with_flags(
-            duckdb::AccessMode::ReadOnly
+        // Persistent, read-only connection — warm cache across requests. The
+        // local file is just DuckDB scratch; the DuckLake catalog is ATTACHed
+        // from Postgres and data lives on S3, so durability comes from those,
+        // not from this connection being in-memory.
+        let conn = Connection::open_with_flags(
+            "duckdb_read.db",
+            Config::default().access_mode(AccessMode::ReadOnly),
         ).unwrap();
         
         conn.execute("INSTALL ducklake; INSTALL postgres; INSTALL httpfs;", []).unwrap();
+        conn.execute("LOAD ducklake; LOAD postgres; LOAD httpfs;", []).unwrap();
         
         Self { read_conn: conn }
     }
@@ -244,8 +260,9 @@ Single container deployment:
 └─────────────────────────────────────────┘
 ```
 
-**Scaling reads:** Add more containers behind a load balancer. Each container
-is independent (no shared state). Auto-scale based on:
+**Scaling reads:** The default deployment is a **single container**. For higher
+read concurrency or high availability, add containers behind a load balancer —
+each is independent (no shared state). Auto-scale based on:
 
 - CPU utilization > 70% → add container
 - CPU utilization < 30% → remove container
@@ -258,7 +275,7 @@ Kubernetes HPA example:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 spec:
-  minReplicas: 2
+  minReplicas: 1  # default; set 2+ for high availability
   maxReplicas: 10
   metrics:
   - type: Resource

@@ -24,8 +24,8 @@ largest intermediate result a query must hold.
 Before data size bites, concurrency usually does. DuckDB is single-writer per
 database and is not a multi-tenant query server. This design handles that by:
 
-- Running readers as isolated, short-lived processes (no shared server to
-  contend on).
+- Running readers in a long-running DuckDB service, each query bounded by
+  per-query memory/time limits (no shared mutable state across queries).
 - Serialising writers to one-per-table through Oban.
 - Throttling heavy work via separate Oban queues.
 
@@ -50,6 +50,11 @@ hammering shared tables. That is a job for Snowflake / BigQuery / Trino.
 - **Scale up first.** Bigger machine, better partitioning, more aggressive
   materialization. This buys a surprising amount of room and keeps the simple
   architecture.
+- **Scale reads horizontally.** Before leaving DuckDB, add read-only containers
+  behind a load balancer (the pool model in [03](03-duckdb-service.md)). Each
+  independently attaches the same DuckLake catalog and reads the same S3 Parquet,
+  so interactive read concurrency rises without giving up single-node-per-query
+  simplicity. Writers stay serialized — this scales reads, not writes.
 - **Offload the heavy minority.** Keep DuckDB for the 90% of workloads that fit,
   and route the few genuinely distributed queries to an existing Spark/Trino/
   Athena platform. Most teams never need more than this hybrid.

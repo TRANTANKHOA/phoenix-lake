@@ -135,7 +135,7 @@ Real-time job status with live updates.
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  Status: [All] [Running] [Queued] [Succeed] [Failed]           │
-│  Queue:  [All] [interactive] [ingest] [transform] [maint]      │
+│  Queue:  [All] [interactive] [ingest] [transform] [maintenance]│
 │                                                                 │
 │  ┌──────┬───────────┬──────────┬────────┬────────┬──────────┐ │
 │  │ ID   │ Queue     │ Status   │ Worker │ Started│ Duration │ │

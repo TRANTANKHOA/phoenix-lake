@@ -94,7 +94,7 @@
     <rect x="450" y="48" width="150" height="76" rx="8" fill="url(#duckdbGrad)"/>
     <text x="525" y="72" font-size="13" fill="white" font-weight="600" text-anchor="middle">DuckDB</text>
     <text x="525" y="90" font-size="9" fill="rgba(255,255,255,0.8)" text-anchor="middle">Query · Ingest · Transform</text>
-    <text x="525" y="104" font-size="9" fill="rgba(255,255,255,0.7)" text-anchor="middle">Short-lived processes</text>
+    <text x="525" y="104" font-size="9" fill="rgba(255,255,255,0.7)" text-anchor="middle">Long-running service</text>
     
     <!-- S3 -->
     <rect x="620" y="48" width="140" height="76" rx="8" fill="url(#s3Grad)"/>
@@ -129,7 +129,7 @@
   <div class="card"><p class="card-title"><span class="component-badge badge-phoenix">🔮 Phoenix</span></p><p class="card-desc">API · LiveView · Oban · Auth. The control plane — long-lived workflows, concurrency, real-time UI, orchestration.</p></div>
   <div class="card"><p class="card-title"><span class="component-badge badge-duckdb">🦆 DuckDB service</span></p><p class="card-desc">Query execution · data ingestion · dbt transformation · Parquet management. The data plane — columnar scans, joins, aggregations.</p></div>
   <div class="card"><p class="card-title"><span class="component-badge badge-postgres">🐘 Postgres</span></p><p class="card-desc">App metadata + three DuckLake catalogs (landing, refining, reporting). One database — transactions, snapshots, file lists, Oban jobs.</p></div>
-  <div class="card"><p class="card-title"><span class="component-badge badge-s3">🪣 S3</span></p><p class="card-desc">Enforced staging prefix for incoming files, plus three enforced DuckLake databases (landing, refining, reporting). Immutable Parquet; no authoritative metadata.</p></div>
+  <div class="card"><p class="card-title"><span class="component-badge badge-s3">🪣 S3</span></p><p class="card-desc">A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases (landing, refining, reporting). Immutable Parquet; no authoritative metadata.</p></div>
 </div>
 
 <h2>Two planes</h2>
@@ -170,7 +170,7 @@
     <text x="460" y="80" font-size="11" fill="#475569">• Scan Parquet, join, aggregate</text>
     <text x="460" y="100" font-size="11" fill="#475569">• Write new Parquet files</text>
     <text x="460" y="120" font-size="11" fill="#475569">• Partition pruning</text>
-    <text x="460" y="140" font-size="11" fill="#475569">• Short-lived processes</text>
+    <text x="460" y="140" font-size="11" fill="#475569">• Long-running service</text>
     <text x="460" y="160" font-size="11" fill="#1d4ed8" font-weight="600">Kept off BEAM — won't degrade web tier</text>
   </svg>
 </div>
@@ -187,18 +187,18 @@
     <div class="head">Data plane — DuckDB</div>
     <div class="body">
       <p>Owns the CPU- and memory-heavy work: scanning Parquet, joining, aggregating, writing new Parquet.</p>
-      <p>A unit of work is a short-lived process that starts, does one job, and exits — kept off the BEAM scheduler so one heavy query can't degrade the web tier.</p>
+      <p>Work runs in a long-running DuckDB service (warm, persistent connection) kept off the BEAM scheduler so one heavy query can't degrade the web tier.</p>
     </div>
   </div>
 </div>
-<div class="info info-blue">Why isolate DuckDB from the BEAM? The BEAM excels at concurrency and I/O and deliberately refuses to let one task monopolise the machine — which is exactly what a large analytical scan does. Running DuckDB as a separate service (or in dedicated workers) keeps the web tier responsive and lets the two scale independently.</div>
+<div class="info info-blue">Why isolate DuckDB from the BEAM? The BEAM excels at concurrency and I/O and deliberately refuses to let one task monopolise the machine — which is exactly what a large analytical scan does. Running DuckDB as a separate HTTP service keeps the web tier responsive and lets the two scale independently.</div>
 
 <h2>Infrastructure</h2>
 <p class="subtitle">Proposed components, grouped by role.</p>
 <div class="spec-rows">
   <div class="spec-row"><div class="spec-label">Compute</div><div class="spec-value">A Phoenix/Elixir cluster (web + Oban workers) and a DuckDB query service. The two scale on independent axes — web concurrency vs. query CPU/RAM.</div></div>
   <div class="spec-row"><div class="spec-label">Postgres</div><div class="spec-value">One managed instance: app metadata (owned by Phoenix) and three DuckLake catalogs — landing, refining, reporting — created automatically for every project.</div></div>
-  <div class="spec-row"><div class="spec-label">S3</div><div class="spec-value">An enforced staging prefix for incoming files, plus three enforced DuckLake databases — landing (raw), refining (transformed), reporting (materialized). Users write models; the platform provides the structure.</div></div>
+  <div class="spec-row"><div class="spec-label">S3</div><div class="spec-value">A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases — landing (raw), refining (transformed), reporting (materialized). Users write models; the platform provides the structure.</div></div>
 </div>
 <p style="font-size:12px;color:#475569;">Per-environment sizing would follow the repo convention of one config file per environment:</p>
 <span class="config-pill">dev</span><span class="config-pill">prod</span><span class="config-pill">produs</span><span class="config-pill">prodae</span><span class="config-pill">prodbr</span>

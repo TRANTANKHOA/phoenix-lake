@@ -136,7 +136,7 @@
         <li>P95 latency > SLA → add container</li>
         <li>Queue depth > threshold → add container</li>
       </ul>
-      <p style="font-size:11px;color:#64748b;">Kubernetes HPA or ECS target tracking. Min 2, max 10.</p>
+      <p style="font-size:11px;color:#64748b;">Kubernetes HPA or ECS target tracking. Default 1; scales 1→10 (set min 2 for high availability).</p>
     </div>
   </div>
   <div class="split-card">
@@ -158,7 +158,7 @@
 
 <div class="info info-yellow"><strong>The single real limit: query intermediate size.</strong> Scans stream and don't accumulate, so scan <em>size</em> is rarely the problem (pruning means a 10&nbsp;TB table may touch a few GB). The wall appears when a query must materialise state larger than one machine's RAM — a wide high-cardinality <code>GROUP BY</code>, a huge hash-join build side, a global sort. DuckDB spills to local disk; it can't shuffle across machines. The predictor is not table size, it's the largest intermediate a query must hold.</div>
 
-<div class="info info-blue"><strong>The limit you hit first: concurrency.</strong> DuckDB is single-writer per database and not a multi-tenant query server. This design handles bounded concurrency — tens of dashboards, a team of analysts — via isolated reader processes and serialised writers. It does <em>not</em> scale to hundreds of simultaneous interactive tenants; that's a job for Snowflake / BigQuery / Trino.</div>
+<div class="info info-blue"><strong>The limit you hit first: concurrency.</strong> DuckDB is single-writer per database and not a multi-tenant query server. This design handles bounded concurrency — tens of dashboards, a team of analysts — via a long-running DuckDB service with per-query limits and serialised writers. It does <em>not</em> scale to hundreds of simultaneous interactive tenants; that's a job for Snowflake / BigQuery / Trino.</div>
 
 <h3>The honest decision rule</h3>
 <div class="decision-grid">

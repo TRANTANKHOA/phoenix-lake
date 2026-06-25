@@ -101,7 +101,7 @@
     <div class="head">Platform provides</div>
     <div class="body">
       <p>DuckDB execution, S3 credentials, DuckLake connections, <code>profiles.yml</code> generation, resource isolation, scheduling, and retry logic.</p>
-      <p>Each run executes in an isolated DuckDB process with memory and time caps.</p>
+      <p>Each run executes in an Oban worker that submits SQL to the long-running DuckDB service over HTTP; the service enforces per-query memory and time caps.</p>
     </div>
   </div>
 </div>
@@ -113,7 +113,7 @@
     <li>Platform reads <code>ducklake.yml</code> from the repo root to provision databases and set retention policies.</li>
     <li>Platform validates the dbt project against the enforced template: all sources must target <code>landing</code>, all outputs must target <code>refining</code> or <code>reporting</code>.</li>
     <li>A git push, webhook, cron schedule, or manual trigger enqueues an Oban job on the <code>transform</code> queue.</li>
-    <li>The worker clones the repo, generates a <code>profiles.yml</code> connecting to landing, refining, and reporting databases, and runs <code>dbt run</code>.</li>
+    <li>The worker clones the repo, generates a <code>profiles.yml</code> pointing a thin custom adapter at the DuckDB service over HTTP, and runs <code>dbt run</code>.</li>
     <li>dbt reads from landing via <code>source()</code>, transforms, and writes to refining or reporting — each model write publishes a new DuckLake snapshot.</li>
     <li>Results are broadcast via PubSub and surfaced in the LiveView UI. Temporary files are cleaned up.</li>
   </ol>

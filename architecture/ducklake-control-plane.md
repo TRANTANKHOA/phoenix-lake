@@ -27,8 +27,9 @@ Oban, and records what work exists and what state it is in. It holds decisions
 about data, not data itself.
 
 DuckDB is the data plane: it does the CPU- and memory-heavy work — scanning
-Parquet, joining, aggregating, writing new Parquet — in short-lived isolated
-processes, deliberately kept off the BEAM scheduler.
+Parquet, joining, aggregating, writing new Parquet — in a long-running DuckDB
+service (a Rust/Axum process with a warm, persistent read connection),
+deliberately kept off the BEAM scheduler.
 
 One Postgres instance underpins both: app metadata for Phoenix, and three
 DuckLake catalogs (landing, refining, reporting) for the lake. S3 holds the
@@ -72,14 +73,15 @@ published snapshots.
 3. Route small bounded queries to a synchronous DuckDB call; route anything
    expensive to an Oban job and return a handle.
 4. Supervise jobs via Oban queues separated by cost profile (`interactive`,
-   `ingest`, `transform`) so heavy work never starves quick work.
+   `ingest`, `transform`, `maintenance`) so heavy work never starves quick work.
 5. Read/write app metadata in Postgres; broadcast job and query events over
    PubSub so LiveView updates live.
 
 **DuckDB service (data plane)**
 
-1. Run work in short-lived, single-purpose processes — one connection per
-   query/job, then exit, releasing all memory and bounding blast radius.
+1. Run as a long-running service holding a warm, persistent read-only
+   connection; open a temporary connection per write and serialize writes
+   through a per-table writer queue so one writer owns a table at a time.
 2. Resolve a table to its current snapshot via the DuckLake catalog, prune
    partitions, and scan only the needed Parquet from S3.
 3. On ingestion/transformation, write Parquet then publish the new snapshot in a
@@ -88,9 +90,11 @@ published snapshots.
    snapshots, and delete now-unreferenced files (catalog-driven).
 5. Enforce per-query memory/row/time limits so a runaway query fails fast.
 
-Two deployment forms compose: a dedicated query service (Rust wrapping
-DuckDB, or a thin DuckDB server) for interactive reads, and worker-embedded
-DuckDB inside Oban workers for batch jobs.
+One deployment form: a dedicated DuckDB service (a Rust/Axum process wrapping
+DuckDB) handles both interactive reads and batch writes. Phoenix and its Oban
+workers call it over HTTP; for dbt, a thin custom dbt adapter submits compiled
+SQL to this same service. DuckDB is never embedded in the BEAM or the Oban
+workers.
 
 ## Infrastructure
 

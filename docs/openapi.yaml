@@ -14,6 +14,8 @@ servers:
 tags:
   - name: Databases
     description: List and inspect DuckLake databases
+  - name: Auth
+    description: Authentication, sessions, and API token lifecycle (DRAFT)
   - name: Query
     description: Run and monitor SQL queries
   - name: Ingest
@@ -441,6 +443,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobAction'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /job/{job_id}/retry:
     post:
@@ -455,11 +459,125 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobAction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Browser login (DRAFT — not yet implemented)
+      security: []   # this is how a session/token is obtained; no bearer required
+      description: |
+        DRAFT endpoint. Browser login flow that authenticates a local
+        (email/password) or WorkOS SSO user and sets a session cookie. API
+        clients instead mint a `pk_live_` token via `POST /auth/token`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Session established (session cookie set)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current session/token (DRAFT — not yet implemented)
+      description: |
+        DRAFT endpoint. Revokes the session (browser) or the calling token
+        (API). After logout the presented token is no longer valid.
+      responses:
+        '200':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/token:
+    get:
+      tags: [Auth]
+      summary: List the caller's API tokens (DRAFT — not yet implemented)
+      description: DRAFT endpoint. Returns token metadata (never the secret).
+      responses:
+        '200':
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Token'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Auth]
+      summary: Mint a new API token (DRAFT — not yet implemented)
+      description: |
+        DRAFT endpoint. Creates a new `pk_live_` token for the authenticated
+        user. The full secret is returned **exactly once**; only the bcrypt
+        hash and the 8-char prefix are persisted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Human label for the token
+                expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: Optional expiry; omit for a non-expiring token (default TTL applies per G4).
+      responses:
+        '201':
+          description: Token created — full secret returned once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/token/{token_id}:
+    delete:
+      tags: [Auth]
+      summary: Revoke an API token (DRAFT — not yet implemented)
+      parameters:
+        - name: token_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Token revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /health:
     get:
       tags: [Health]
       summary: Service health check
+      security: []   # public — no bearer token required
       responses:
         '200':
           description: Service is healthy
@@ -514,6 +632,14 @@ components:
         timeout_ms:
           type: integer
           default: 5000
+          description: |
+            Client-side deadline in milliseconds for the synchronous response.
+            If the query does not finish within `timeout_ms`, the API returns
+            `202` with a job handle for async polling instead of holding the
+            connection. The DuckDB service enforces a separate, longer server
+            fallback timeout (default 30000 ms = 30 s) as a safety net on the
+            async path — i.e. 5 s is the sync/wait deadline, 30 s is the hard
+            kill for runaway queries.
 
     QueryResult:
       type: object
@@ -571,6 +697,11 @@ components:
           enum: [queued, running, succeed, failed]
         worker:
           type: string
+          description: |
+            Oban worker module name (the `worker` column of `oban_jobs`), e.g.
+            `PhoenixLake.Workers.QueryWorker`. ⚠ verify against the real
+            `oban_jobs` schema when implementing — the projected fields here are
+            a subset for the API view, not a 1:1 mirror of every Oban column.
         args:
           type: object
         result:
@@ -738,6 +869,42 @@ components:
         version:
           type: string
 
+    Token:
+      type: object
+      description: API token metadata. The secret (`pk_live_...`) is never returned.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        key_prefix:
+          type: string
+          description: First 8 characters of the token (used for lookup).
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the token stops being accepted (persisted, not virtual — see G4).
+        created_at:
+          type: string
+          format: date-time
+
+    TokenCreated:
+      type: object
+      description: Returned exactly once when a token is minted.
+      properties:
+        token:
+          type: string
+          description: The full secret, e.g. `pk_live_<48 random chars>`.
+        token_id:
+          type: string
+        key_prefix:
+          type: string
+
   responses:
     BadRequest:
       description: Invalid request
@@ -797,6 +964,18 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      # NOTE: tokens are opaque, NOT JWTs — there is no signature to validate,
+      # so OpenAPI's `bearerFormat` is deliberately omitted.
+      description: |
+        Opaque bearer token (not a JWT). Tokens are random strings of the form
+        `pk_live_<48 random chars>` (e.g. `pk_live_a1b2c3...`). Send the full
+        token in the Authorization header: `Authorization: Bearer pk_live_...`.
+        The API resolves the token by its 8-character prefix and verifies the
+        remainder against a stored bcrypt hash (`Bcrypt.verify_pass/2`). Tokens
+        are issued by the `/auth/token` endpoints and revoked by `/auth/logout`
+        or `DELETE /auth/token/{token_id}`.
 
-security: []
+# All endpoints require bearerAuth unless an operation overrides with
+# `security: []` (see /health and the /auth/login browser flow below).
+security:
+  - bearerAuth: []

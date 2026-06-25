@@ -256,7 +256,7 @@
   <details open style="margin:4px 0;">
     <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0f172a;padding:6px 0;">oban_jobs <span style="font-weight:400;color:#94a3b8;font-size:11px;">— queue</span></summary>
     <div style="padding:4px 0 4px 16px;font-size:12px;color:#475569;line-height:1.8;">
-      <div><code>queue</code> :string — ingest | transform | maintenance</div>
+      <div><code>queue</code> :string — interactive | ingest | transform | maintenance</div>
       <div><code>state</code> :enum — available | executing | completed | retryable</div>
       <div><code>args</code> :jsonb — job arguments</div>
       <div><code>errors</code> :jsonb — error history</div>
@@ -483,8 +483,8 @@ sequenceDiagram
 <div class="algo-card">
   <p class="algo-card-title">How to capture</p>
   <div class="spec-rows" style="margin:0;">
-    <div class="spec-row"><span class="spec-key">Option A</span><span class="spec-val">Post-exec query</span><span><code>SELECT * FROM duckdb_query_metrics()</code> after each query. DuckDB returns metrics for the last executed query.</span></div>
-    <div class="spec-row"><span class="spec-key">Option B</span><span class="spec-val">Profile callback</span><span>Use DuckDB's <code>PRAGMA profiling_mode='detailed'</code> + <code>PRAGMA profiling_output='...'</code> to capture structured output.</span></div>
+    <div class="spec-row"><span class="spec-key">Option A</span><span class="spec-val">Profiler output</span><span>Enable DuckDB's profiler (<code>PRAGMA enable_profiling='json'</code> + <code>PRAGMA profiling_output='...'</code>) to capture a structured plan with timing/row stats per query. <strong>⚠ verify</strong> exactly which fields DuckDB exposes (rows, timing) against the current profiling docs — there is <em>no</em> built-in <code>duckdb_query_metrics()</code> SQL function; bytes_scanned / cpu_time are not all available without the profiler.</span></div>
+    <div class="spec-row"><span class="spec-key">Option B</span><span class="spec-val">Result stats</span><span>Read row/column counts from the DuckDB result handle and combine with wall-clock timing captured by the service.</span></div>
     <div class="spec-row"><span class="spec-key">Option C</span><span class="spec-val">Axum middleware</span><span>Wrap query execution with timing + stats collection in Rust. Most control, no extra queries.</span></div>
   </div>
 </div>

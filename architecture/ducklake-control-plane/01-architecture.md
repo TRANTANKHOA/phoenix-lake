@@ -10,8 +10,9 @@ record of what work exists and what state it is in. It holds almost no data — 
 holds *decisions about* data.
 
 The data plane is DuckDB. It owns everything that is CPU- and memory-heavy:
-scanning Parquet, joining, aggregating, and writing new Parquet files. A unit of
-data work is a short-lived DuckDB process that starts, does one job, and exits.
+scanning Parquet, joining, aggregating, and writing new Parquet files. It runs
+as a long-running DuckDB service (a Rust/Axum process) that Phoenix and its
+Oban workers call over HTTP.
 
 Postgres sits underneath both planes as the shared source of truth, and S3 holds
 the bytes.
@@ -48,9 +49,8 @@ the bytes.
 messaging, and I/O, and deliberately bad at letting one task monopolise the
 machine. A large analytical scan is exactly that kind of task. Embedding DuckDB
 directly in the Phoenix node would let one heavy query degrade the scheduler for
-every connected user. Running DuckDB as a separate service (or in dedicated
-worker processes) keeps the web tier responsive and lets the two scale on
-different axes.
+every connected user. Running DuckDB as a separate HTTP service keeps the web
+tier responsive and lets the two scale on different axes.
 
 **Why Postgres holds the catalogs.** DuckLake stores lakehouse metadata in a SQL
 database. Putting the three catalogs (landing, refining, reporting) in the

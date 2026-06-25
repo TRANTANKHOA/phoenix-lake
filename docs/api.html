@@ -25,7 +25,7 @@
       gap: 6px;
     }
     .back-nav a:hover { color: #fff; }
-    .back-nav a::before { content: "90"; }
+    .back-nav a::before { content: "\2190"; }
   </style>
 </head>
 <body>
@@ -55,6 +55,10 @@
     {
       "name": "Databases",
       "description": "List and inspect DuckLake databases"
+    },
+    {
+      "name": "Auth",
+      "description": "Authentication, sessions, and API token lifecycle (DRAFT)"
     },
     {
       "name": "Query",
@@ -275,7 +279,14 @@
             }
           },
           "202": {
-            "description": "Timeout exceeded, query enqueued for async execution"
+            "description": "Query enqueued for async execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryJobResult"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -767,6 +778,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -792,6 +806,173 @@
                 }
               }
             }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Browser login (DRAFT — not yet implemented)",
+        "security": [],
+        "description": "DRAFT. Browser login flow that authenticates a local (email/password) or WorkOS SSO user and sets a session cookie. API clients mint a pk_live_ token via POST /auth/token instead.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session established (session cookie set)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke the current session/token (DRAFT — not yet implemented)",
+        "description": "DRAFT. Revokes the session (browser) or the calling token (API).",
+        "responses": {
+          "200": {
+            "description": "Logged out"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/token": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "List the caller's API tokens (DRAFT — not yet implemented)",
+        "description": "DRAFT. Returns token metadata (never the secret).",
+        "responses": {
+          "200": {
+            "description": "List of tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Token"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Mint a new API token (DRAFT — not yet implemented)",
+        "description": "DRAFT. Creates a new pk_live_ token. The full secret is returned exactly once; only the bcrypt hash and the 8-char prefix are persisted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Human label for the token"
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "Optional expiry; omit for a non-expiring token (default TTL applies per G4)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token created — full secret returned once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/token/{token_id}": {
+      "delete": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke an API token (DRAFT — not yet implemented)",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token revoked"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -802,6 +983,7 @@
           "Health"
         ],
         "summary": "Service health check",
+        "security": [],
         "responses": {
           "200": {
             "description": "Service is healthy",
@@ -880,7 +1062,8 @@
           },
           "timeout_ms": {
             "type": "integer",
-            "default": 5000
+            "default": 5000,
+            "description": "Client-side sync deadline in ms (default 5000). If the query exceeds it the API returns 202 with a job handle; the DuckDB service enforces a separate 30000 ms (30 s) hard kill on the async path. 5 s = sync wait deadline, 30 s = runaway-query kill."
           }
         }
       },
@@ -975,7 +1158,8 @@
             ]
           },
           "worker": {
-            "type": "string"
+            "type": "string",
+            "description": "Oban worker module name (the worker column of oban_jobs), e.g. PhoenixLake.Workers.QueryWorker. ⚠ verify against the real oban_jobs schema when implementing — projected subset for the API view, not a 1:1 mirror."
           },
           "args": {
             "type": "object"
@@ -1223,6 +1407,53 @@
             "type": "string"
           }
         }
+      },
+      "Token": {
+        "type": "object",
+        "description": "API token metadata. The secret (pk_live_...) is never returned.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "key_prefix": {
+            "type": "string",
+            "description": "First 8 characters of the token (used for lookup)."
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the token stops being accepted (persisted, not virtual — see G4)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TokenCreated": {
+        "type": "object",
+        "description": "Returned exactly once when a token is minted.",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The full secret, e.g. pk_live_<48 random chars>."
+          },
+          "token_id": {
+            "type": "string"
+          },
+          "key_prefix": {
+            "type": "string"
+          }
+        }
       }
     },
     "responses": {
@@ -1311,11 +1542,15 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "description": "Opaque bearer token (not a JWT). Tokens are random strings of the form pk_live_<48 random chars>. Send the full token: Authorization: Bearer pk_live_.... The API resolves the token by its 8-char prefix and verifies the remainder with Bcrypt.verify_pass/2. bearerFormat is deliberately omitted — there is no signature to validate."
       }
     }
   },
-  "security": []
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
 };
   SwaggerUIBundle({
     spec: spec,

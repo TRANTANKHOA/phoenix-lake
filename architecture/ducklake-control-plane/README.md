@@ -26,7 +26,7 @@ Each component is aligned to its strength:
 - **Elixir / Phoenix** — long-lived workflows, concurrency, real-time UI, auth, orchestration.
 - **DuckDB** — columnar scans, joins, aggregations, Parquet read/write. Executes dbt models.
 - **Postgres** — transactions, app metadata, and three DuckLake catalogs (landing, refining, reporting) — snapshots, schema, file lists.
-- **S3** — an enforced staging prefix for incoming files, plus three enforced DuckLake databases (landing, refining, reporting) for data storage.
+- **S3** — a plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases (landing, refining, reporting) for data storage.
 
 ## How data flows
 
@@ -73,7 +73,7 @@ Models must follow the enforced template: `source()` targets `landing`, `ref()` 
 - [02 — Phoenix application](02-phoenix-app.md) — API, LiveView, Oban, Auth.
 - [03 — DuckDB service](03-duckdb-service.md) — query execution, ingestion, dbt transformation, Parquet management, process isolation.
 - [04 — Postgres & DuckLake catalog](04-postgres-ducklake.md) — app metadata and three DuckLake catalogs in one database.
-- [05 — S3 storage](05-s3-storage.md) — enforced staging prefix, three-layer database template, partitioning, snapshots.
+- [05 — S3 storage](05-s3-storage.md) — plain S3 staging prefix, three-layer database template, partitioning, snapshots.
 - [06 — Data flows](06-data-flows.md) — ingestion, query, and transformation paths end to end.
 - [07 — Scaling boundaries](07-scaling-boundaries.md) — where this design breaks and when to reach for a distributed engine.
 - [08 — Design validation](08-validation.md) — the design checked against current DuckLake/DuckDB docs, with sources.

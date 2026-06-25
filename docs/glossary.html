@@ -91,8 +91,8 @@
 
 <div class="glossary-item">
   <div class="glossary-term">Materialize</div>
-  <div class="glossary-def">Process of refreshing pre-computed aggregations or reports from source tables on a schedule.</div>
-  <div class="glossary-fit"><strong>Fit:</strong> Reporting layer uses materialized views for dashboards — read-optimized, refreshed via Oban jobs.</div>
+  <div class="glossary-def">Process of materializing pre-computed results — views, tables, or external files — from source tables on a schedule. In this system, reporting models are materialized by dbt.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Reporting models use dbt <code>external</code> materialization, writing Parquet to <code>s3://&lt;bucket&gt;/reporting/</code> — read-optimized, triggered by Oban on the <code>transform</code> queue.</div>
 </div>
 
 <div class="glossary-item">
@@ -106,7 +106,7 @@
   <div class="glossary-def">Background job framework for Elixir, backed by Postgres. Schedules work, controls concurrency, retries on failure, and persists jobs across restarts.</div>
   <div class="glossary-pros"><strong>Pros:</strong> ACID-backed persistence; queue-based concurrency control; built-in retry and scheduling; Oban Pro adds workflows and rate limiting.</div>
   <div class="glossary-cons"><strong>Cons:</strong> Requires Postgres; not a distributed task queue like Celery.</div>
-  <div class="glossary-fit"><strong>Fit:</strong> Serializes writers to one-per-table; queues split by cost profile (interactive, ingest, transform). Tells DuckDB what to do and when.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Serializes writers to one-per-table; queues split by cost profile (interactive, ingest, transform, maintenance). Tells DuckDB what to do and when.</div>
 </div>
 
 <div class="glossary-item">
@@ -152,13 +152,13 @@
 
 <div class="glossary-item">
   <div class="glossary-term">Reporting</div>
-  <div class="glossary-def">Third DuckLake database. Holds materialized aggregations and pre-computed results for dashboards and downstream consumers.</div>
-  <div class="glossary-fit"><strong>Fit:</strong> Read-optimized layer for dashboards — refreshes via scheduled Oban jobs, readers always see latest snapshot.</div>
+  <div class="glossary-def">Third DuckLake database. Holds pre-computed aggregations materialized by dbt as external Parquet for dashboards and downstream consumers.</div>
+  <div class="glossary-fit"><strong>Fit:</strong> Read-optimized layer for dashboards — reporting models are materialized by dbt (triggered on the <code>transform</code> queue by git push, webhook, cron, or manual push) as external Parquet; readers always see the latest published snapshot.</div>
 </div>
 
 <div class="glossary-item">
   <div class="glossary-term">S3 <a href="https://docs.aws.amazon.com/s3/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
-  <div class="glossary-def">Object storage for Parquet data files. Enforced staging prefix for incoming files, plus three enforced DuckLake databases.</div>
+  <div class="glossary-def">Object storage for Parquet data files. A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases.</div>
   <div class="glossary-pros"><strong>Pros:</strong> Effectively infinite storage; cost scales independently of compute; immutability by default.</div>
   <div class="glossary-cons"><strong>Cons:</strong> Eventually consistent (but DuckLake handles this via catalog).</div>
   <div class="glossary-fit"><strong>Fit:</strong> Storage decoupled from compute — many DuckDB processes can read the same Parquet concurrently.</div>

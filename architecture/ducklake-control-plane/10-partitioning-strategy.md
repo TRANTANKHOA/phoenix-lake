@@ -131,13 +131,17 @@ When to skip tenant partitioning:
 Check for partitions that are too small or too large:
 
 ```sql
--- List partition sizes
+-- List partition sizes by querying the DuckLake catalog metadata directly.
+-- DuckLake exposes its catalog as standard SQL tables (ducklake_file, ducklake_table, ...)
+-- ⚠ verify column names against the current DuckLake v1.0 catalog spec
+--    (https://ducklake.select/docs/stable/specification/tables/overview.html — 28 tables);
+--    the names below are illustrative of the shape, not a guaranteed schema.
 SELECT
   partition_value,
-  COUNT(*) as file_count,
-  SUM(size_bytes) / 1024 / 1024 as size_mb
-FROM ducklake_data_files
-WHERE table_id = (SELECT id FROM ducklake_table WHERE table_name = 'events')
+  COUNT(*) AS file_count,
+  SUM(file_size_bytes) / 1024 / 1024 AS size_mb
+FROM ducklake_file
+WHERE table_id = (SELECT table_id FROM ducklake_table WHERE name = 'events')
 GROUP BY partition_value
 ORDER BY size_mb DESC;
 ```

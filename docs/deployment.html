@@ -41,7 +41,9 @@
 
 <main>
 <h1>Deployment</h1>
-<p class="subtitle">Phoenix Lake supports multiple deployment modes — from local development to production on AWS.</p>
+<p class="subtitle">The design targets several deployment modes — from local development to production on AWS.</p>
+
+<div class="info info-yellow">Design proposal, not a deployed service. The modes below are a <strong>target / reference</strong> deployment — not yet built. They would fit the existing CodePipeline model (source → build a Phoenix release + DuckDB service image → multi-account deploy per environment), with Postgres provisioned as managed infrastructure and S3 buckets per env.</div>
 
 <h2>Deployment modes</h2>
 
@@ -172,7 +174,7 @@ SECRET_KEY_BASE=dev_only_secret_key_base</code></pre>
     <!-- DuckDB tasks -->
     <rect x="365" y="50" width="80" height="40" rx="4" fill="#1d4ed8"/>
     <text x="405" y="72" font-size="8" fill="white" text-anchor="middle">DuckDB</text>
-    <text x="405" y="84" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">x2-10 (HPA)</text>
+    <text x="405" y="84" font-size="7" fill="rgba(255,255,255,0.7)" text-anchor="middle">x1-10 (HPA)</text>
     
     <!-- Arrows to managed services -->
     <line x1="315" y1="90" x2="315" y2="130" stroke="#64748b" stroke-width="1" marker-end="url(#arrowAWS)"/>

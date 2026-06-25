@@ -77,7 +77,7 @@ Async execution engine backed by Postgres.
 - Query worker (async execution)
 - dbt transformation worker
 - Compaction worker
-- Queue isolation (interactive, ingest, transform)
+- Queue isolation (interactive, ingest, transform, maintenance)
 
 ### Phase 6: LiveView UI
 

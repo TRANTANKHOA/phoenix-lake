@@ -8,8 +8,8 @@ The API is the programmatic entry point for clients and integrations.
 
 - Accepts query requests, ingestion submissions, and job-control calls.
 - Validates and authorizes every request before any work is scheduled.
-- For fast, interactive queries it calls the DuckDB service synchronously and
-  streams rows back.
+- For fast, interactive queries it calls the DuckDB service over HTTP
+  synchronously and streams rows back.
 - For anything expensive or long-running it enqueues an Oban job and returns a
   job handle the client can poll or subscribe to.
 
@@ -54,12 +54,15 @@ Oban is the job engine, backed by the same Postgres instance.
   reports as background jobs.
 - Provides retries, uniqueness, scheduling (cron-style), and rate limiting per
   queue — so heavy data work is throttled independently of web traffic.
-- Each job invokes the DuckDB service to do the actual data work, then records
-  the outcome and the resulting catalog snapshot in Postgres.
+- Each job invokes the DuckDB service over HTTP to do the actual data work,
+  then records the outcome and the resulting catalog snapshot in Postgres. For
+  dbt, the worker runs `dbt` whose thin custom adapter submits compiled SQL to
+  the service — the worker itself runs no DuckDB.
 
-Queues are separated by cost profile (for example: a low-latency `interactive`
-queue, a `ingest` queue, and a `transform` queue) so a backlog of heavy jobs
-never starves quick ones.
+Queues are separated by cost profile — `interactive` (low-latency reads that
+time out of the synchronous path), `ingest`, `transform`, and `maintenance`
+(compaction, retention, file cleanup) — so a backlog of heavy jobs never
+starves quick ones.
 
 ## Auth
 

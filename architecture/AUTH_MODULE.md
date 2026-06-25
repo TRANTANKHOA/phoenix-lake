@@ -403,15 +403,30 @@ defmodule PhoenixLakeWeb.Plugs.Auth do
   end
 
   defp validate_token(key) do
+    # The stored key_hash is a bcrypt digest (random salt), so it cannot be
+    # matched by an equality lookup. Look up the token by its 8-char prefix,
+    # then verify the full secret against the stored hash with Bcrypt.verify_pass/2.
     prefix = String.slice(key, 0, 8)
-    hash = Bcrypt.hash_pwd_salt(key)
 
-    case PhoenixLake.Repo.get_by(Token, key_prefix: prefix, key_hash: hash) do
-      nil -> :error
+    case PhoenixLake.Repo.get_by(Token, key_prefix: prefix) do
+      nil ->
+        :error
+
       token ->
-        user = PhoenixLake.Repo.preload(token, :user).user
-        if user.active, do: {:ok, user, token}, else: :error
+        # verify_pass is constant-time and safe against timing leaks; it also
+        # returns false (not raises) when the hash/format is invalid.
+        if Bcrypt.verify_pass(key, token.key_hash) and not expired?(token) do
+          user = PhoenixLake.Repo.preload(token, :user).user
+          if user.active, do: {:ok, user, token}, else: :error
+        else
+          :error
+        end
     end
+  end
+
+  defp expired?(%{expires_at: nil}), do: false
+  defp expired?(%{expires_at: expires_at}) do
+    DateTime.compare(expires_at, DateTime.utc_now()) == :lt
   end
 
   defp validate_session(user_id) do

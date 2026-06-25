@@ -6,8 +6,10 @@ provides the execution environment; the user provides the SQL.
 ## How it works
 
 A user connects a GitHub or GitLab repository containing a standard dbt project.
-The platform pulls the repo, runs `dbt run` in an isolated DuckDB process, and
-writes results to the refining or reporting database. Users get the full dbt
+The platform pulls the repo and runs `dbt run` inside an Oban worker — **no
+local DuckDB**. A thin custom adapter submits each model's compiled SQL to the
+DuckDB service over HTTP, which executes it and writes results to the refining
+or reporting database. Users get the full dbt
 experience — version control, PRs, CI, `dbt docs`, lineage — while the platform
 handles execution and storage.
 
@@ -82,7 +84,8 @@ The platform uses this file to:
 - Set snapshot retention policies per database.
 - Validate that dbt models write to the correct layer with the expected
   partition structure.
-- Generate the `profiles.yml` with the correct `attach` entries.
+- Generate the `profiles.yml` pointing dbt at the DuckDB service over HTTP
+  (see [Platform execution](#platform-execution)).
 
 ## Template validation
 
@@ -122,25 +125,29 @@ When a run is triggered (by git push, webhook, cron schedule, or manual trigger)
 3. The worker validates the project against the template (same checks as
    registration). If validation fails, the job fails immediately with a clear
    error.
-4. The worker generates a `profiles.yml` that connects to the DuckDB service
-   via Postgres wire protocol (through load balancer):
+4. The worker generates a `profiles.yml` that points dbt at the DuckDB service
+   over HTTP using a thin custom adapter (a small fork of `dbt-duckdb` that
+   overrides only the connection layer):
    ```yaml
    default:
      outputs:
        dev:
-         type: postgres
-         host: duckdb-lb
-         port: 5432
-         dbname: landing
-         user: duckdb
-         pass: duckdb
+         type: duckdb_service        # custom adapter (dbt-duckdb fork)
+         host: duckdb-service         # DuckDB service HTTP endpoint
+         port: 8080
+         # S3 credentials and data paths are injected by the service; the service
+         # has all three DuckLake catalogs (landing, refining, reporting) ATTACHed.
    ```
-   Multiple databases (landing, refining, reporting) are handled by switching
-   the `dbname` or using schema prefixes — the DuckDB service routes to the
-   correct catalog.
-5. The worker runs `dbt run` (or `dbt build` for models + tests). dbt submits
-   SQL to the DuckDB service via Postgres wire protocol. The service handles
-   execution across multiple DuckDB containers.
+   Because the service has all three catalogs ATTACHed, `source('landing', ...)`
+   and `ref()` resolve to catalog-qualified names the service routes correctly —
+   there is no per-run `dbname` switch. The adapter inherits all of `dbt-duckdb`'s
+   semantics (DuckDB dialect, DuckLake `ATTACH`, `external` materialization) and
+   only swaps the transport: it submits compiled SQL over HTTP instead of opening
+   a local DuckDB connection.
+5. The worker runs `dbt run` (or `dbt build` for models + tests). The custom
+   adapter submits each model's SQL to the DuckDB service over HTTP. The service
+   executes it against the ATTACHed DuckLake catalogs and serializes writes
+   through its per-table writer queue.
 6. dbt reads from `landing` via `source()`, writes to `refining` or `reporting`
    via `ref()` or `external` materialization.
 7. Each model write publishes a new snapshot in the target catalog — same
@@ -148,9 +155,10 @@ When a run is triggered (by git push, webhook, cron schedule, or manual trigger)
 8. Worker records success/failure, broadcasts results over PubSub, and cleans up
    the temporary directory.
 
-**Key architectural change:** The Oban worker is stateless — it does not run
-DuckDB locally. All compute happens in the DuckDB service. Workers just run
-dbt which submits SQL to the service.
+**Key architectural decision:** The Oban worker is stateless — it runs `dbt`
+but **no local DuckDB**. All compute happens in the long-running DuckDB service.
+A thin custom dbt adapter is the only bridge: it submits compiled SQL over HTTP
+and returns results. DuckDB is never embedded in the BEAM or the Oban worker.
 
 ## dbt project conventions
 
@@ -211,10 +219,11 @@ group by 1
 
 ## Isolation and resource limits
 
-Each dbt run executes in a short-lived, isolated DuckDB process:
+Each dbt run executes in an Oban worker that submits SQL to the long-running
+DuckDB service (there is no per-run DuckDB process):
 
-- **Memory cap** — the worker sets `DuckDB_MEMORY_LIMIT` per run so a heavy
-  model cannot exhaust the host.
+- **Memory cap** — the DuckDB service enforces `DUCKDB_MEMORY_LIMIT` per query
+  so a heavy model cannot exhaust the service (or its container).
 - **Timeout** — Oban job timeout kills runaway runs; the user can configure a
   per-project timeout in the UI (default: 30 minutes).
 - **One writer per table** — the platform serializes writes to the same

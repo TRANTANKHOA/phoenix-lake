@@ -25,7 +25,7 @@ commentary (as of mid-2026). The core claims hold; three points needed nuance.
   semantics. This backs the ingestion and materialization flows, which depend on
   publish-or-nothing visibility.
 - **DuckDB is one-writer, many-readers, single-process.** Confirmed. The design's
-  response — isolated short-lived reader processes plus control-plane-serialised
+  response — a long-running DuckDB service (per-query resource limits) plus control-plane-serialised
   writers — matches the documented model rather than fighting it.
 
 ## Nuanced after validation
