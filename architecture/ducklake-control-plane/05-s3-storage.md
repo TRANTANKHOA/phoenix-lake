@@ -1,7 +1,7 @@
 # 05 — S3 storage
 
 The platform enforces a three-layer template. Every project gets three DuckLake
-databases with a fixed naming convention. Users don't choose the structure —
+catalogs with a fixed naming convention. Users don't choose the structure —
 they choose what to put in it.
 
 ```
@@ -10,15 +10,19 @@ refining/    →  transformed, enriched, joined (dbt models live here)
 reporting/   →  materialized aggregations for consumption
 ```
 
-Each database is auto-created by the platform:
+Each catalog is auto-created by the platform:
 
 ```sql
-CREATE DATABASE landing   (TYPE ducklake, DATA_PATH 's3://<bucket>/landing/');
-CREATE DATABASE refining  (TYPE ducklake, DATA_PATH 's3://<bucket>/refining/');
-CREATE DATABASE reporting (TYPE ducklake, DATA_PATH 's3://<bucket>/reporting/');
+-- ⚠ verify exact ATTACH parameters against the current DuckLake (v1.x) syntax.
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS landing
+  (DATA_PATH 's3://<bucket>/landing/',   METADATA_SCHEMA 'ducklake_landing');
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS refining
+  (DATA_PATH 's3://<bucket>/refining/',  METADATA_SCHEMA 'ducklake_refining');
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS reporting
+  (DATA_PATH 's3://<bucket>/reporting/', METADATA_SCHEMA 'ducklake_reporting');
 ```
 
-Staging is not a database — it is a plain S3 prefix managed by the ingestion
+Staging is not a catalog — it is a plain S3 prefix managed by the ingestion
 worker. The flow is: staging → landing (enforced), then landing → refining →
 reporting (user-driven via dbt or materialization jobs).
 
@@ -68,7 +72,7 @@ refresh.
   confirms nothing points at it.
 - Staging files are not catalog-managed; they are cleaned up by the ingestion
   worker after promotion or on a TTL-based sweep.
-- Each database can have independent retention and compaction policies — landing
+- Each catalog can have independent retention and compaction policies — landing
   may keep 90 days of snapshots while reporting keeps 30.
 
 ## Why this is cheap and scalable

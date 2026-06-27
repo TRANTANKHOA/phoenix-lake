@@ -47,7 +47,7 @@
 <div class="stat-grid">
   <div class="stat"><span class="num">1</span><span class="label">Postgres instance</span></div>
   <div class="stat"><span class="num">2</span><span class="label">Logical roles</span></div>
-  <div class="stat"><span class="num">3</span><span class="label">DuckLake databases</span></div>
+  <div class="stat"><span class="num">3</span><span class="label">DuckLake catalogs</span></div>
   <div class="stat"><span class="num">0</span><span class="label">Separate catalog services</span></div>
 </div>
 
@@ -314,7 +314,7 @@ CREATE DATABASE reporting (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/reporti
 
 <!-- ==================== SNAPSHOT FLOW ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#22c55e;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">3</span>
+  <span style="background:#22c55e;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">4</span>
   Snapshot Lifecycle
 </h2>
 <p class="subtitle">How data moves from staging to committed snapshot.</p>
@@ -351,7 +351,7 @@ sequenceDiagram
 
 <!-- ==================== WHY ONE POSTGRES ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#be185d;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">4</span>
+  <span style="background:#be185d;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
   Why One Postgres
 </h2>
 
@@ -369,7 +369,7 @@ sequenceDiagram
 
 <!-- ==================== SNAPSHOTS & CLEANUP ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
+  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">6</span>
   Snapshots & Cleanup
 </h2>
 
@@ -384,27 +384,9 @@ sequenceDiagram
   </ol>
 </div>
 
-<!-- ==================== OWNERSHIP RULES ==================== -->
-<h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">6</span>
-  Ownership Rules
-</h2>
-
-<div class="info info-blue">No separate catalog service to deploy, secure, back up, and keep consistent. Backups, point-in-time recovery, and access control are solved once, for all roles, by Postgres.</div>
-
-<div class="algo-card">
-  <p class="algo-card-title">Advantages</p>
-  <div class="spec-rows" style="margin:0;">
-    <div class="spec-row"><span class="spec-key">Transaction consistency</span><span class="spec-val">ACID</span><span>Catalog update is one Postgres transaction — never orphaned files or phantom snapshots.</span></div>
-    <div class="spec-row"><span class="spec-key">No extra service</span><span class="spec-val">−1 component</span><span>No Glue, no standalone metastore to deploy and maintain.</span></div>
-    <div class="spec-row"><span class="spec-key">Backup</span><span class="spec-val">pg_dump / PITR</span><span>One backup strategy covers both app metadata and catalog.</span></div>
-    <div class="spec-row"><span class="spec-key">Access control</span><span class="spec-val">Postgres roles</span><span>Same RBAC for app tables and catalog tables.</span></div>
-  </div>
-</div>
-
 <!-- ==================== OWNERSHIP ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">5</span>
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">7</span>
   Ownership Rules
 </h2>
 
@@ -420,7 +402,7 @@ sequenceDiagram
 
 <!-- ==================== MATURITY ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">6</span>
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">8</span>
   Maturity Caveat
 </h2>
 
@@ -428,7 +410,7 @@ sequenceDiagram
 
 <!-- ==================== REGISTRY SYNC ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">8</span>
+  <span style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">9</span>
   Registry Sync
 </h2>
 <p class="subtitle">How DuckLake catalog and Phoenix registry stay consistent.</p>
@@ -463,7 +445,7 @@ sequenceDiagram
 
 <!-- ==================== QUERY COST ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">9</span>
+  <span style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">10</span>
   Query Cost Capture
 </h2>
 <p class="subtitle">DuckDB exposes query metrics after execution. Capture them in query_history.</p>
@@ -493,7 +475,7 @@ sequenceDiagram
 
 <!-- ==================== DESIGN DECISIONS ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
-  <span style="background:#0f172a;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">10</span>
+  <span style="background:#0f172a;color:#fff;padding:4px 10px;border-radius:6px;font-size:14px;">11</span>
   Design Decisions
 </h2>
 
@@ -552,7 +534,7 @@ sequenceDiagram
 <div class="related">
   <span class="related-label">References</span>
   <div class="related-grid">
-    <a href="https://duckdb.org/docs/extensions/ducklake.html" class="related-link" target="_blank">
+    <a href="https://ducklake.select/" class="related-link" target="_blank">
       <span class="name">DuckLake Extension</span>
       <span class="desc">DuckDB catalog-backed table format</span>
     </a>

@@ -390,7 +390,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [queued, running, succeed, failed]
+            enum: [queued, running, succeeded, failed]
         - name: queue
           in: query
           schema:
@@ -662,7 +662,7 @@ components:
       properties:
         status:
           type: string
-          enum: [queued, running, succeed, failed]
+          enum: [queued, running, succeeded, failed]
         job_id:
           type: string
         result:
@@ -694,7 +694,7 @@ components:
           enum: [interactive, ingest, transform, maintenance]
         status:
           type: string
-          enum: [queued, running, succeed, failed]
+          enum: [queued, running, succeeded, failed]
         worker:
           type: string
           description: |
@@ -731,7 +731,7 @@ components:
       properties:
         status:
           type: string
-          enum: [queued, running, succeed, failed]
+          enum: [queued, running, succeeded, failed]
         job_id:
           type: string
         table:

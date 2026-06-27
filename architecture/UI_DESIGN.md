@@ -224,7 +224,7 @@ Upload and monitor file ingestion.
 
 - `NavbarComponent` — top nav with active state
 - `StatsGrid` — stat cards with numbers
-- `StatusBadge` — colored status indicators (running, queued, succeed, failed)
+- `StatusBadge` — colored status indicators (running, queued, succeeded, failed)
 - `DataTable` — sortable, paginated table
 - `SchemaViewer` — column list with types and partition markers
 - `JobRow` — expandable job details

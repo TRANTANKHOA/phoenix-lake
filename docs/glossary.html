@@ -85,7 +85,7 @@
 
 <div class="glossary-item">
   <div class="glossary-term">Landing</div>
-  <div class="glossary-def">First DuckLake database. Holds raw, validated data promoted from staging by the ingestion worker.</div>
+  <div class="glossary-def">First DuckLake catalog (landing). Holds raw, validated data promoted from staging by the ingestion worker.</div>
   <div class="glossary-fit"><strong>Fit:</strong> Source of truth for incoming data; all dbt models source from here via <code>source()</code>.</div>
 </div>
 
@@ -146,19 +146,19 @@
 
 <div class="glossary-item">
   <div class="glossary-term">Refining</div>
-  <div class="glossary-def">Second DuckLake database. Holds transformed and enriched data written by dbt models or DuckDB transformation jobs.</div>
+  <div class="glossary-def">Second DuckLake catalog (refining). Holds transformed and enriched data written by dbt models or DuckDB transformation jobs.</div>
   <div class="glossary-fit"><strong>Fit:</strong> Intermediate layer between raw landing and consumer-facing reporting — business logic lives here.</div>
 </div>
 
 <div class="glossary-item">
   <div class="glossary-term">Reporting</div>
-  <div class="glossary-def">Third DuckLake database. Holds pre-computed aggregations materialized by dbt as external Parquet for dashboards and downstream consumers.</div>
+  <div class="glossary-def">Third DuckLake catalog (reporting). Holds pre-computed aggregations materialized by dbt as external Parquet for dashboards and downstream consumers.</div>
   <div class="glossary-fit"><strong>Fit:</strong> Read-optimized layer for dashboards — reporting models are materialized by dbt (triggered on the <code>transform</code> queue by git push, webhook, cron, or manual push) as external Parquet; readers always see the latest published snapshot.</div>
 </div>
 
 <div class="glossary-item">
   <div class="glossary-term">S3 <a href="https://docs.aws.amazon.com/s3/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
-  <div class="glossary-def">Object storage for Parquet data files. A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases.</div>
+  <div class="glossary-def">Object storage for Parquet data files. A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake catalogs.</div>
   <div class="glossary-pros"><strong>Pros:</strong> Effectively infinite storage; cost scales independently of compute; immutability by default.</div>
   <div class="glossary-cons"><strong>Cons:</strong> Eventually consistent (but DuckLake handles this via catalog).</div>
   <div class="glossary-fit"><strong>Fit:</strong> Storage decoupled from compute — many DuckDB processes can read the same Parquet concurrently.</div>
@@ -172,7 +172,7 @@
 
 <div class="glossary-item">
   <div class="glossary-term">Staging</div>
-  <div class="glossary-def">A plain S3 prefix for incoming files. Not a DuckLake database. The ingestion worker reads from here and promotes to landing.</div>
+  <div class="glossary-def">A plain S3 prefix for incoming files. Not a DuckLake catalog. The ingestion worker reads from here and promotes to landing.</div>
   <div class="glossary-fit"><strong>Fit:</strong> Decouples file delivery from ingestion — producers drop files, worker validates and promotes.</div>
 </div>
 

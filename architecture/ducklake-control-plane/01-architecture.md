@@ -39,8 +39,8 @@ the bytes.
   by the platform for every project.
 
 **S3**
-- Immutable Parquet data files across three enforced databases: landing (raw),
-  refining (transformed), reporting (materialized). Staging is a plain S3
+- Immutable Parquet data files across three enforced DuckLake catalogs: landing
+  (raw), refining (transformed), reporting (materialized). Staging is a plain S3
   prefix managed by the ingestion worker.
 
 ## Why each boundary exists
@@ -62,8 +62,8 @@ but the catalog doesn't (or vice versa).
 **Why S3 is the only data store.** Storage is decoupled from compute. Any number
 of DuckDB processes can read the same Parquet concurrently, and storage cost
 scales independently of how much compute is running. Three separate DuckLake
-databases (landing, refining, reporting) give catalog-level isolation while
-sharing the same bucket and Postgres instance.
+catalogs (landing, refining, reporting) keep the layers isolated while sharing
+the same bucket and Postgres instance.
 
 ## What this design assumes
 

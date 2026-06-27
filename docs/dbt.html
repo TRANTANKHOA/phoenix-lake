@@ -80,7 +80,7 @@
     <!-- Arrow -->
     <line x1="550" y1="90" x2="600" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
     
-    <!-- DuckLake Databases -->
+    <!-- DuckLake Catalogs -->
     <rect x="600" y="30" width="180" height="120" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
     <text x="690" y="55" font-size="12" fill="#166534" font-weight="600" text-anchor="middle">DuckLake Catalogs</text>
     <text x="690" y="80" font-size="10" fill="#475569" text-anchor="middle">landing (source)</text>
@@ -110,7 +110,7 @@
   <p class="algo-card-title">Git-synced dbt flow</p>
   <ol class="algo-steps">
     <li>User connects their GitHub/GitLab repo via the Phoenix UI and selects a branch.</li>
-    <li>Platform reads <code>ducklake.yml</code> from the repo root to provision databases and set retention policies.</li>
+    <li>Platform reads <code>ducklake.yml</code> from the repo root to provision catalogs and set retention policies.</li>
     <li>Platform validates the dbt project against the enforced template: all sources must target <code>landing</code>, all outputs must target <code>refining</code> or <code>reporting</code>.</li>
     <li>A git push, webhook, cron schedule, or manual trigger enqueues an Oban job on the <code>transform</code> queue.</li>
     <li>The worker clones the repo, generates a <code>profiles.yml</code> pointing a thin custom adapter at the DuckDB service over HTTP, and runs <code>dbt run</code>.</li>
@@ -121,7 +121,7 @@
 
 <div class="algo-card">
   <p class="algo-card-title">Template YAML — <code>ducklake.yml</code></p>
-  <p style="font-size:12px;color:#475569;margin:0 0 8px 0;">Every dbt project must include this file at the repo root. The platform reads it to provision databases and validate models.</p>
+  <p style="font-size:12px;color:#475569;margin:0 0 8px 0;">Every dbt project must include this file at the repo root. The platform reads it to provision catalogs and validate models.</p>
   <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>layers:
   landing:
     description: "Raw validated data from ingestion"
@@ -149,7 +149,7 @@
 
 <div class="info info-blue"><strong>Full design:</strong> See <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/09-dbt-integration.md" style="color:#1d4ed8">09 — dbt integration</a> for project conventions, isolation, failure handling, and incremental model support.</div>
 
-<div class="info info-yellow"><strong>Database creation.</strong> The three databases (landing, refining, reporting) are created automatically by the platform at project setup. Users don't need to set up databases — they just write dbt models that target them.</div>
+<div class="info info-yellow"><strong>Catalog creation.</strong> The three catalogs (landing, refining, reporting) are created automatically by the platform at project setup. Users don't need to set up catalogs — they just write dbt models that target them.</div>
 </main>
 
 <footer class="site-footer">

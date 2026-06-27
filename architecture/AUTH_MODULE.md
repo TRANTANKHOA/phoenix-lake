@@ -81,7 +81,8 @@ defmodule PhoenixLake.Accounts.Token do
     field :key_prefix, :string         # first 8 chars (pk_live_...)
     field :name, :string               # "CI pipeline", "dbt runner"
     field :scopes, {:array, :string}, default: ["read", "write"]
-    field :expires_at, :utc_datetime, virtual: true
+    field :expires_at, :utc_datetime           # persisted; default TTL 90 days (set at creation)
+    field :last_used_at, :utc_datetime           # updated on each validation (D5)
     belongs_to :user, PhoenixLake.Accounts.User
     timestamps()
   end
@@ -297,7 +298,7 @@ multiple groups, the highest role wins: admin > editor > viewer.
 
 ### Library
 
-Use [Assent](https://hexdeps.pm/assent) — the standard Elixir library for
+Use [Assent](https://hexdocs.pm/assent) — the standard Elixir library for
 multi-provider OAuth2/OIDC. Supports Google, WorkOS, Okta, and 20+ providers
 out of the box.
 
@@ -710,6 +711,8 @@ defmodule PhoenixLake.Repo.Migrations.CreateAccounts do
       add :key_prefix, :string, null: false
       add :name, :string
       add :scopes, {:array, :string}, null: false, default: ["read", "write"]
+      add :expires_at, :utc_datetime             # default TTL 90 days; nil = no expiry
+      add :last_used_at, :utc_datetime            # updated on each validation (D5)
       timestamps()
     end
 

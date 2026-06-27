@@ -313,6 +313,30 @@ throughput but not write throughput. Scale writes by:
 Write bottleneck is per-table serialization in the DuckDB service, not DuckDB
 capacity.
 
+### Read replicas and catalog freshness
+
+When the read pool runs more than one container (see [Scaling reads](#deployment)),
+each replica is a fully independent DuckDB service that **read-only ATTACHes the
+same DuckLake catalog** stored in Postgres. There is nothing to replicate between
+replicas:
+
+- **Catalog is shared, not copied.** All replicas ATTACH the one DuckLake catalog
+  in Postgres, so a new snapshot is visible to every replica the moment the
+  writer's Postgres transaction commits. Readers get snapshot isolation — a query
+  pins the snapshot version it started with.
+- **Data is shared.** Parquet lives on S3; every replica scans the same immutable
+  files.
+- **Cache freshness.** Each replica caches catalog metadata and zone maps in
+  process memory. On a configurable refresh interval (or when a query's pinned
+  snapshot is older than that interval), the replica re-reads the catalog from
+  Postgres. Staleness is bounded by that interval — never by cross-replica
+  propagation, because there is none.
+- **Writes still serialize.** Replicas only read. All writes go through the
+  single-writer queue in one writer-capable instance; replicas never accept writes.
+
+This is why the pool scales reads (stateless containers over a shared catalog and
+S3) but not writes.
+
 ## What the service does not do
 
 - No access control — trusts the control plane's authorization

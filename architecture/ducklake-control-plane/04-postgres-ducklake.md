@@ -1,8 +1,8 @@
 # 04 — Postgres & DuckLake catalog
 
 One Postgres instance serves two roles: the application database and the
-DuckLake catalog for multiple databases. Keeping them together is a deliberate
-simplification.
+DuckLake catalog. Every project gets three DuckLake catalogs (landing, refining,
+reporting). Keeping them together is a deliberate simplification.
 
 ## App metadata
 
@@ -18,15 +18,22 @@ This is read and written by Phoenix on every request and job.
 
 ## DuckLake catalog
 
-DuckLake stores lakehouse metadata in a SQL database rather than in object-store
-manifest files. In this design that database is the same Postgres. Every project
-gets three databases with a fixed naming convention — landing, refining,
-reporting — created automatically by the platform:
+DuckLake stores lakehouse metadata in a SQL database (the *catalog database*)
+rather than in object-store manifest files. In this design the catalog database
+is the same Postgres that holds app metadata. Every project gets three DuckLake
+catalogs with a fixed naming convention — landing, refining, reporting — created
+automatically by the platform. Each is a separate `ATTACH`:
 
 ```sql
-CREATE DATABASE landing   (TYPE ducklake, DATA_PATH 's3://<bucket>/landing/');
-CREATE DATABASE refining  (TYPE ducklake, DATA_PATH 's3://<bucket>/refining/');
-CREATE DATABASE reporting (TYPE ducklake, DATA_PATH 's3://<bucket>/reporting/');
+-- ⚠ verify exact ATTACH parameters against the current DuckLake (v1.x) syntax.
+-- Each catalog stores its metadata in a distinct Postgres schema (METADATA_SCHEMA)
+-- so the three catalogs share one Postgres instance without colliding.
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS landing
+  (DATA_PATH 's3://<bucket>/landing/',   METADATA_SCHEMA 'ducklake_landing');
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS refining
+  (DATA_PATH 's3://<bucket>/refining/',  METADATA_SCHEMA 'ducklake_refining');
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS reporting
+  (DATA_PATH 's3://<bucket>/reporting/', METADATA_SCHEMA 'ducklake_reporting');
 ```
 
 Each catalog holds:
@@ -39,6 +46,14 @@ Each catalog holds:
 A query resolves a table to its current snapshot by reading the appropriate
 catalog, which tells DuckDB exactly which S3 files to scan.
 
+> **Terminology — catalog vs database.** In DuckLake, a *catalog* is what you
+> `ATTACH` (here `landing`, `refining`, `reporting`) — the attached lake with its
+> tables and snapshots. A *catalog database* is the SQL backend that stores that
+> metadata (this Postgres). The HTTP API and grant model expose the three catalogs
+> under the `database` resource and `database` field name (e.g.
+> `database: "landing"`); there, "database" means "a DuckLake catalog," not a
+> Postgres database.
+
 ## Why one Postgres
 
 The decisive advantage is **transactional consistency between data and catalog**.
@@ -49,12 +64,12 @@ new snapshot becomes visible or it doesn't — there is never a state where the
 files exist but no snapshot references them, or a snapshot references files that
 aren't there yet.
 
-Separate databases give catalog-level isolation:
+Separate catalogs give isolation at the catalog boundary:
 
-- A bad dbt run in one database cannot corrupt another.
-- Each database can have independent snapshot retention and compaction policies.
-- Access control is per-database: analysts can be granted read on certain
-  databases while others stay restricted.
+- A bad dbt run in one catalog cannot corrupt another.
+- Each catalog can have independent snapshot retention and compaction policies.
+- Access control is per-catalog: analysts can be granted read on certain
+  catalogs while others stay restricted.
 
 It also removes a whole service. There is no separate catalog system (no Glue, no
 standalone metastore) to deploy, secure, back up, and keep consistent with the
@@ -65,8 +80,8 @@ all roles, by Postgres.
 
 Though physically one Postgres, the concerns stay logically separate:
 
-- Landing, refining, and reporting are distinct DuckLake databases with their own
-  catalog tables, snapshots, and data paths.
+- Landing, refining, and reporting are distinct DuckLake catalogs, each with its
+  own catalog tables, snapshots, and data path.
 - The landing catalog is written only by the ingestion worker; Phoenix reads
   from it but treats it as owned by the data plane.
 - The refining and reporting catalogs are written by dbt and materialization

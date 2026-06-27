@@ -47,8 +47,8 @@
   .status-running { background: #fef3c7; color: #92400e; }
   .status-running::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; animation: pulse 1.5s infinite; }
   .status-queued { background: #f1f5f9; color: #475569; }
-  .status-succeed { background: #dcfce7; color: #166534; }
-  .status-succeed::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+  .status-succeeded { background: #dcfce7; color: #166534; }
+  .status-succeeded::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
   .status-failed { background: #fee2e2; color: #b91c1c; }
   .status-failed::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
   .health-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block; }
@@ -182,14 +182,14 @@
         </li>
         <li class="job-item">
           <span class="job-id">#845</span>
-          <span class="status status-succeed">succeed</span>
+          <span class="status status-succeeded">succeeded</span>
           <span class="job-queue">ingest</span>
           <span class="job-worker">IngestWorker — users</span>
           <span class="job-time">8m ago</span>
         </li>
         <li class="job-item">
           <span class="job-id">#844</span>
-          <span class="status status-succeed">succeed</span>
+          <span class="status status-succeeded">succeeded</span>
           <span class="job-queue">interactive</span>
           <span class="job-worker">QueryWorker — ad-hoc</span>
           <span class="job-time">12m ago</span>
@@ -221,9 +221,9 @@
   <!-- Recent Queries -->
   <div class="card">
     <div class="card-header">Recent Queries</div>
-    <div class="query-item"><span class="status status-succeed" style="font-size:9px;">✓</span><span class="query-sql">SELECT count(*) FROM landing.orders WHERE created_at > '2026-01-01'</span><span class="query-dur">120ms</span></div>
-    <div class="query-item"><span class="status status-succeed" style="font-size:9px;">✓</span><span class="query-sql">SELECT * FROM refining.users LIMIT 10</span><span class="query-dur">45ms</span></div>
-    <div class="query-item"><span class="status status-succeed" style="font-size:9px;">✓</span><span class="query-sql">SELECT sum(revenue) FROM reporting.monthly_agg GROUP BY month</span><span class="query-dur">890ms</span></div>
+    <div class="query-item"><span class="status status-succeeded" style="font-size:9px;">✓</span><span class="query-sql">SELECT count(*) FROM landing.orders WHERE created_at > '2026-01-01'</span><span class="query-dur">120ms</span></div>
+    <div class="query-item"><span class="status status-succeeded" style="font-size:9px;">✓</span><span class="query-sql">SELECT * FROM refining.users LIMIT 10</span><span class="query-dur">45ms</span></div>
+    <div class="query-item"><span class="status status-succeeded" style="font-size:9px;">✓</span><span class="query-sql">SELECT sum(revenue) FROM reporting.monthly_agg GROUP BY month</span><span class="query-dur">890ms</span></div>
     <div class="query-item"><span class="status status-running" style="font-size:9px;">●</span><span class="query-sql">SELECT o.*, u.email FROM landing.orders o JOIN landing.users u ON o.user_id = u.id</span><span class="query-dur">running</span></div>
   </div>
 </div>
@@ -328,7 +328,7 @@
     <div class="tab active" data-filter="all">All</div>
     <div class="tab" data-filter="running">Running</div>
     <div class="tab" data-filter="queued">Queued</div>
-    <div class="tab" data-filter="succeed">Succeed</div>
+    <div class="tab" data-filter="succeeded">Succeeded</div>
     <div class="tab" data-filter="failed">Failed</div>
   </div>
 
@@ -338,8 +338,8 @@
       <tbody>
         <tr data-status="running"><td class="num">#847</td><td><span class="job-queue">ingest</span></td><td><span class="status status-running">running</span></td><td>IngestWorker</td><td>2m ago</td><td>2m 14s</td><td><button class="btn btn-sm btn-danger">Cancel</button></td></tr>
         <tr data-status="queued"><td class="num">#846</td><td><span class="job-queue">transform</span></td><td><span class="status status-queued">queued</span></td><td>TransformWorker</td><td>5m ago</td><td>—</td><td></td></tr>
-        <tr data-status="succeed"><td class="num">#845</td><td><span class="job-queue">ingest</span></td><td><span class="status status-succeed">succeed</span></td><td>IngestWorker</td><td>8m ago</td><td>1m 02s</td><td></td></tr>
-        <tr data-status="succeed"><td class="num">#844</td><td><span class="job-queue">interactive</span></td><td><span class="status status-succeed">succeed</span></td><td>QueryWorker</td><td>12m ago</td><td>3.2s</td><td></td></tr>
+        <tr data-status="succeeded"><td class="num">#845</td><td><span class="job-queue">ingest</span></td><td><span class="status status-succeeded">succeeded</span></td><td>IngestWorker</td><td>8m ago</td><td>1m 02s</td><td></td></tr>
+        <tr data-status="succeeded"><td class="num">#844</td><td><span class="job-queue">interactive</span></td><td><span class="status status-succeeded">succeeded</span></td><td>QueryWorker</td><td>12m ago</td><td>3.2s</td><td></td></tr>
         <tr data-status="failed"><td class="num">#843</td><td><span class="job-queue">maintenance</span></td><td><span class="status status-failed">failed</span></td><td>CompactWorker</td><td>15m ago</td><td>45s</td><td><button class="btn btn-sm btn-outline">Retry</button></td></tr>
       </tbody>
     </table>
@@ -356,7 +356,7 @@
       <div class="drop-zone">
         <div class="drop-zone-icon">📄</div>
         <div class="drop-zone-text">Drop Parquet files here or <strong style="color:#7c3aed;">browse</strong></div>
-        <div class="drop-zone-hint">Files land in staging, auto-promoted to landing database</div>
+        <div class="drop-zone-hint">Files land in staging, auto-promoted to landing catalog</div>
       </div>
       <div style="display:flex;gap:12px;align-items:center;">
         <span style="font-size:12px;color:#64748b;">Target table:</span>
@@ -371,7 +371,7 @@
     <table class="data-table">
       <thead><tr><th>File</th><th>Table</th><th>Status</th><th>Rows</th><th>Duration</th></tr></thead>
       <tbody>
-        <tr><td>20260619_120000_abc.parquet</td><td>orders</td><td><span class="status status-succeed">succeed</span></td><td class="num">12,847</td><td>2m 14s</td></tr>
+        <tr><td>20260619_120000_abc.parquet</td><td>orders</td><td><span class="status status-succeeded">succeeded</span></td><td class="num">12,847</td><td>2m 14s</td></tr>
         <tr><td>20260619_120001_def.parquet</td><td>users</td><td><span class="status status-running">running</span></td><td class="num">—</td><td>running</td></tr>
         <tr><td>20260619_120002_ghi.parquet</td><td>items</td><td><span class="status status-failed">failed</span></td><td class="num">—</td><td>45s</td></tr>
       </tbody>

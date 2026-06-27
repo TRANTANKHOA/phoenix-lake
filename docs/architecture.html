@@ -129,7 +129,7 @@
   <div class="card"><p class="card-title"><span class="component-badge badge-phoenix">🔮 Phoenix</span></p><p class="card-desc">API · LiveView · Oban · Auth. The control plane — long-lived workflows, concurrency, real-time UI, orchestration.</p></div>
   <div class="card"><p class="card-title"><span class="component-badge badge-duckdb">🦆 DuckDB service</span></p><p class="card-desc">Query execution · data ingestion · dbt transformation · Parquet management. The data plane — columnar scans, joins, aggregations.</p></div>
   <div class="card"><p class="card-title"><span class="component-badge badge-postgres">🐘 Postgres</span></p><p class="card-desc">App metadata + three DuckLake catalogs (landing, refining, reporting). One database — transactions, snapshots, file lists, Oban jobs.</p></div>
-  <div class="card"><p class="card-title"><span class="component-badge badge-s3">🪣 S3</span></p><p class="card-desc">A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases (landing, refining, reporting). Immutable Parquet; no authoritative metadata.</p></div>
+  <div class="card"><p class="card-title"><span class="component-badge badge-s3">🪣 S3</span></p><p class="card-desc">A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake catalogs (landing, refining, reporting). Immutable Parquet; no authoritative metadata.</p></div>
 </div>
 
 <h2>Two planes</h2>
@@ -198,7 +198,7 @@
 <div class="spec-rows">
   <div class="spec-row"><div class="spec-label">Compute</div><div class="spec-value">A Phoenix/Elixir cluster (web + Oban workers) and a DuckDB query service. The two scale on independent axes — web concurrency vs. query CPU/RAM.</div></div>
   <div class="spec-row"><div class="spec-label">Postgres</div><div class="spec-value">One managed instance: app metadata (owned by Phoenix) and three DuckLake catalogs — landing, refining, reporting — created automatically for every project.</div></div>
-  <div class="spec-row"><div class="spec-label">S3</div><div class="spec-value">A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake databases — landing (raw), refining (transformed), reporting (materialized). Users write models; the platform provides the structure.</div></div>
+  <div class="spec-row"><div class="spec-label">S3</div><div class="spec-value">A plain S3 prefix (staging) for incoming files, plus three enforced DuckLake catalogs — landing (raw), refining (transformed), reporting (materialized). Users write models; the platform provides the structure.</div></div>
 </div>
 <p style="font-size:12px;color:#475569;">Per-environment sizing would follow the repo convention of one config file per environment:</p>
 <span class="config-pill">dev</span><span class="config-pill">prod</span><span class="config-pill">produs</span><span class="config-pill">prodae</span><span class="config-pill">prodbr</span>

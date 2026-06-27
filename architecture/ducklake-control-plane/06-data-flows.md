@@ -6,7 +6,7 @@ Each one shows how the control plane, data plane, Postgres, and S3 cooperate.
 ## Ingestion
 
 The ingestion path accepts flat Parquet files delivered to a staging S3 prefix
-and promotes them into the **landing** DuckLake database.
+and promotes them into the **landing** DuckLake catalog.
 
 **Ingestion is append-only.** The ingestion worker validates schema conformance
 and row limits, then promotes files as-is. It does not clean, deduplicate,
@@ -56,7 +56,7 @@ without rewriting any files.
 2. A scheduled Oban job or S3-triggered event detects new files and enqueues an
    ingest job on the `ingest` queue.
 3. The DuckDB ingestion worker reads the staged files, validates schema
-   conformance and row limits, then promotes them to the landing database —
+   conformance and row limits, then promotes them to the landing catalog —
    applying partition layout (e.g. `year=2026/month=06/day=15/`) based on
    partition columns in the data.
 4. In one Postgres transaction, the landing catalog is updated to publish a new

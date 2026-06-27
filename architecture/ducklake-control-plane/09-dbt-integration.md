@@ -9,7 +9,7 @@ A user connects a GitHub or GitLab repository containing a standard dbt project.
 The platform pulls the repo and runs `dbt run` inside an Oban worker — **no
 local DuckDB**. A thin custom adapter submits each model's compiled SQL to the
 DuckDB service over HTTP, which executes it and writes results to the refining
-or reporting database. Users get the full dbt
+or reporting catalog. Users get the full dbt
 experience — version control, PRs, CI, `dbt docs`, lineage — while the platform
 handles execution and storage.
 
@@ -29,16 +29,16 @@ User's repo (GitHub/GitLab)
 2. User selects which branch to sync (default: `main`).
 3. Platform clones the repo and validates the dbt project against the enforced
    template (see validation below).
-4. Platform provisions databases from the template and triggers the first run.
+4. Platform provisions catalogs from the template and triggers the first run.
 
-The three databases (landing, refining, reporting) are created automatically by
+The three catalogs (landing, refining, reporting) are created automatically by
 the platform from the template YAML.
 
 ## Template YAML
 
 Every dbt project must include a `ducklake.yml` at the repo root. This file
-defines the three layers and is the source of truth for database provisioning.
-The platform reads it and creates the databases accordingly.
+defines the three layers and is the source of truth for catalog provisioning.
+The platform reads it and creates the catalogs accordingly.
 
 ```yaml
 # ducklake.yml
@@ -79,9 +79,9 @@ layers:
 
 The platform uses this file to:
 
-- Create the three DuckLake databases in Postgres with the correct S3 data
+- Create the three DuckLake catalogs in Postgres with the correct S3 data
   paths.
-- Set snapshot retention policies per database.
+- Set snapshot retention policies per catalog.
 - Validate that dbt models write to the correct layer with the expected
   partition structure.
 - Generate the `profiles.yml` pointing dbt at the DuckDB service over HTTP
@@ -100,10 +100,10 @@ validates it against the enforced template:
 **dbt project validation:**
 4. **`dbt_project.yml` exists** and is parseable.
 5. **All `source()` references target `landing`** — models may only read from the
-   landing database. Cross-database reads from refining or reporting are not
+   landing catalog. Cross-catalog reads from refining or reporting are not
    allowed as sources.
 6. **All `ref()` outputs target `refining` or `reporting`** — models write to
-   one of the two downstream databases. Writes to landing are not allowed.
+   one of the two downstream catalogs. Writes to landing are not allowed.
 7. **Reporting models use `external` materialization** — models targeting
    reporting must write Parquet to `s3://<bucket>/reporting/...` via the
    `external` materialization strategy.
@@ -173,7 +173,7 @@ custom configuration:
 select * from {{ source('landing', 'orders') }}
 ```
 
-**dbt_project.yml maps databases:**
+**dbt_project.yml maps catalogs:**
 ```yaml
 name: 'my_project'
 version: '1.0.0'
@@ -209,7 +209,7 @@ group by 1
 |---|---|
 | DuckDB version and extensions | Platform |
 | S3 credentials and secrets | Platform |
-| DuckLake database connections | Platform |
+| DuckLake catalog connections | Platform |
 | profiles.yml generation | Platform |
 | Execution isolation and resource limits | Platform |
 | Scheduling and retry logic | Platform |

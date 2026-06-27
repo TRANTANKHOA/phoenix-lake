@@ -2,8 +2,14 @@
 
 Multi-component layout for Phoenix Lake. Each directory maps to an architecture component.
 
+> **Target layout, not the current repo.** The repository is scaffolding — only
+> `architecture/`, `docs/`, `app/`, `duckdb-service/`, and `tests/` exist today. The
+> `dbt/`, `helm/`, and `terraform/` subtrees below are the **planned** final layout, kept
+> here so contributors can see where each component is heading. The LiveView list is kept in
+> sync with `architecture/UI_DESIGN.md`.
+
 ```
-ducklake/
+phoenix-lake/
 │
 ├── architecture/                    # Design docs (source of truth)
 │   ├── IMPLEMENTATION_HIERARCHY.md  # Phased build plan
@@ -74,11 +80,13 @@ ducklake/
 │   │       │   ├── query_controller.ex
 │   │       │   ├── ingest_controller.ex
 │   │       │   └── job_controller.ex
-│   │       ├── live/                # LiveView components
+│   │       ├── live/                # LiveView components (6 — see UI_DESIGN.md)
 │   │       │   ├── dashboard_live.ex
 │   │       │   ├── query_live.ex
 │   │       │   ├── datasets_live.ex
-│   │       │   └── jobs_live.ex
+│   │       │   ├── table_live.ex
+│   │       │   ├── jobs_live.ex
+│   │       │   └── ingest_live.ex
 │   │       ├── components/          # Shared UI components
 │   │       │   ├── layouts.ex
 │   │       │   └── core_components.ex

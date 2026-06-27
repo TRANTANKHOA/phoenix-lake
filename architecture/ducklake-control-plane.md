@@ -34,7 +34,7 @@ deliberately kept off the BEAM scheduler.
 One Postgres instance underpins both: app metadata for Phoenix, and three
 DuckLake catalogs (landing, refining, reporting) for the lake. S3 holds the
 only large durable copy of the data, as immutable Parquet, across the three
-enforced databases. Staging is a plain S3 prefix for incoming files.
+enforced DuckLake catalogs. Staging is a plain S3 prefix for incoming files.
 
 Intended users: internal analytics, operational BI, embedded reporting, and
 small-to-mid data marts on a new product where fewer services matter more than
@@ -45,7 +45,7 @@ distributed scale.
 Three flows exercise the whole system:
 
 - **Ingestion** — Parquet files are dropped into a staging S3 prefix, validated
-  and authorized, promoted to the landing DuckLake database, and published as a
+  and authorized, promoted to the landing DuckLake catalog, and published as a
   new snapshot in one Postgres transaction.
 - **Query** — small interactive queries run synchronously against DuckDB and
   stream rows back; expensive queries become Oban jobs and return a handle. Either
@@ -134,7 +134,7 @@ the DuckDB service shipped as a container alongside the Phoenix release.
 
 ## References
 
-- Full design set: `architecture/ducklake-control-plane/` (README + 9 docs).
+- Full design set: `architecture/ducklake-control-plane/` (README + 10 docs).
 - Design validation with sources: `architecture/ducklake-control-plane/08-validation.md`.
 - dbt integration: `architecture/ducklake-control-plane/09-dbt-integration.md`.
 - [DuckLake — SQL as a Lakehouse Format](https://ducklake.select/2025/05/27/ducklake-01/)
