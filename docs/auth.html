@@ -47,7 +47,7 @@
 <div class="stat-grid">
   <div class="stat"><span class="num">2</span><span class="label">Auth paths</span></div>
   <div class="stat"><span class="num">3</span><span class="label">Roles</span></div>
-  <div class="stat"><span class="num">3</span><span class="label">IdP providers</span></div>
+  <div class="stat"><span class="num">4</span><span class="label">IdP providers</span></div>
   <div class="stat"><span class="num">0</span><span class="label">Auth in DuckDB</span></div>
 </div>
 
@@ -61,59 +61,47 @@
   <p class="diagram-title">Two auth paths, one authorization model</p>
   <div class="mermaid">
 sequenceDiagram
-    box rgb(255,251,235) Identity Provider
-    participant IdP
-    end
-
-    box rgb(237,233,254) Phoenix Auth
+    participant IdP as IdP
     participant Browser
     participant Phoenix
     participant Authorize
-    end
-
     participant DuckDB
     participant Postgres
 
-    rect rgb(237,233,254)
-        Note over Browser,IdP: Path 1: Interactive (OAuth2 / OIDC)
-        Browser->>Phoenix: GET /auth/google
-        Phoenix->>IdP: Assent.authorize_url
-        IdP-->>Phoenix: 302 redirect
-        Phoenix-->>Browser: 302 → IdP login
-        Browser->>IdP: User authenticates
-        IdP-->>Phoenix: GET /auth/google/callback?code=...
-        Phoenix->>IdP: Assent.callback (exchange code)
-        IdP-->>Phoenix: tokens + userinfo
-        Phoenix->>Phoenix: find_or_create_user<br/>groups → role mapping
-        Phoenix-->>Browser: session cookie
-    end
+    Note over Browser,IdP: Path 1: Interactive (OAuth2 / OIDC)
+    Browser->>Phoenix: GET /auth/google
+    Phoenix->>IdP: Assent.authorize_url
+    IdP-->>Phoenix: 302 redirect
+    Phoenix-->>Browser: 302 → IdP login
+    Browser->>IdP: User authenticates
+    IdP-->>Phoenix: callback?code=...
+    Phoenix->>IdP: Assent.callback (exchange code)
+    IdP-->>Phoenix: tokens + userinfo
+    Phoenix->>Phoenix: find_or_create_user + role mapping
+    Phoenix-->>Browser: session cookie
 
-    rect rgb(219,234,254)
-        Note over Browser,Phoenix: Path 2: API Token (Bearer)
-        Browser->>Phoenix: POST /v1/query<br/>Authorization: Bearer pk_live_...
-        Phoenix->>Phoenix: extract token<br/>bcrypt hash → prefix lookup<br/>attach user + grants
-    end
+    Note over Browser,Phoenix: Path 2: API Token (Bearer)
+    Browser->>Phoenix: POST /v1/query (Bearer pk_live_...)
+    Phoenix->>Phoenix: extract token, bcrypt lookup, attach user + grants
 
-    rect rgb(240,253,244)
-        Note over Authorize,Postgres: Shared Authorization
-        Phoenix->>Authorize: (user, database, table, permission)
-        Authorize->>Postgres: check grants
-        Postgres-->>Authorize: grants[]
-        alt authorized
-            Authorize-->>Phoenix: ✓ proceed
-            Phoenix->>DuckDB: scoped query (no auth)
-            DuckDB-->>Phoenix: results
-            Phoenix-->>Browser: 200 OK
-        else denied
-            Authorize-->>Phoenix: ✗ deny
-            Phoenix-->>Browser: 403 Forbidden
-        end
+    Note over Authorize,Postgres: Shared Authorization
+    Phoenix->>Authorize: (user, database, table, permission)
+    Authorize->>Postgres: check grants
+    Postgres-->>Authorize: grants[]
+    alt authorized
+        Authorize-->>Phoenix: proceed
+        Phoenix->>DuckDB: scoped query (no auth)
+        DuckDB-->>Phoenix: results
+        Phoenix-->>Browser: 200 OK
+    else denied
+        Authorize-->>Phoenix: deny
+        Phoenix-->>Browser: 403 Forbidden
     end
   </div>
 </div>
 
 <div class="invariant-callout">
-  <p><strong>Security invariant:</strong> DuckDB trusts the control plane completely. It only receives pre-authorized, table-scoped requests. All auth logic lives in Phoenix — one boundary, enforced once.</p>
+  <p><strong>Security invariant:</strong> DuckDB trusts the control plane completely. It only receives pre-authorized, table-scoped requests. All auth logic lives in Phoenix — one boundary, enforced once. Browser (session-cookie) endpoints are CSRF-protected (<code>:protect_from_forgery</code> + <code>SameSite=Strict</code> cookies); API-token requests carry no cookie and are CSRF-exempt.</p>
 </div>
 
 <!-- ==================== INTERACTIVE LOGIN ==================== -->
@@ -127,13 +115,9 @@ sequenceDiagram
   <p class="diagram-title">OAuth2 / OIDC flow with Assent</p>
   <div class="mermaid">
 sequenceDiagram
-    box rgb(237,233,254) Phoenix Control Plane
     participant Browser
     participant Phoenix
-    end
-    box rgb(255,251,235) External
-    participant IdP
-    end
+    participant IdP as IdP (External)
     participant Postgres
 
     Browser->>Phoenix: 1. GET /auth/google
@@ -154,8 +138,7 @@ sequenceDiagram
     Phoenix->>Postgres: 8. fetch groups / directory sync
     Postgres-->>Phoenix: groups[]
 
-    Phoenix->>Phoenix: 9. map groups → role<br/>(data-admins→admin, data-engineers→editor, data-analysts→viewer)
-
+    Phoenix->>Phoenix: 9. map groups → role
     Phoenix->>Postgres: 10. upsert session
     Phoenix-->>Browser: Set-Cookie: session=... (SameSite=Strict)
   </div>
@@ -172,44 +155,35 @@ sequenceDiagram
   <p class="diagram-title">Token validation and grant check</p>
   <div class="mermaid">
 sequenceDiagram
-    box rgb(100,116,139) Client
     participant SDK as SDK / CLI
-    end
-    box rgb(237,233,254) Phoenix
     participant AuthPlug as Auth Plug
     participant AuthzPlug as Authorize Plug
     participant Controller
-    end
     participant Postgres
     participant DuckDB
 
-    SDK->>AuthPlug: POST /v1/query<br/>Authorization: Bearer pk_live_...
+    SDK->>AuthPlug: POST /v1/query (Bearer pk_live_...)
 
-    rect rgb(237,233,254)
-        Note over AuthPlug: Token validation
-        AuthPlug->>AuthPlug: 1. extract token from header
-        AuthPlug->>Postgres: 2. SELECT * FROM tokens<br/>WHERE key_prefix = prefix
-        Postgres-->>AuthPlug: token row (key_hash, user_id, scopes)
-        AuthPlug->>AuthPlug: 3. Bcrypt.verify(token, key_hash)
-        AuthPlug->>AuthPlug: 4. check expires_at (if set)
-        alt valid + not expired
-            AuthPlug->>AuthPlug: 5. update last_used_at<br/>attach user + grants to conn
-        else invalid, expired, or missing
-            AuthPlug-->>SDK: 401 Unauthorized
-        end
+    Note over AuthPlug: Token validation
+    AuthPlug->>AuthPlug: 1. extract token from header
+    AuthPlug->>Postgres: 2. SELECT * FROM tokens WHERE key_prefix = prefix
+    Postgres-->>AuthPlug: token row (key_hash, user_id, scopes)
+    AuthPlug->>AuthPlug: 3. Bcrypt.verify + 4. check expires_at
+    alt valid + not expired
+        AuthPlug->>AuthPlug: 5. update last_used_at, attach user + grants
+    else invalid/expired/missing
+        AuthPlug-->>SDK: 401 Unauthorized
     end
 
-    rect rgb(240,253,244)
-        Note over AuthzPlug: Authorization check
-        AuthzPlug->>AuthzPlug: 1. extract database + table from body
-        AuthzPlug->>Postgres: 2. check grants<br/>(user_id, db, table, permission)
-        Postgres-->>AuthzPlug: grants[]
-        AuthzPlug->>AuthzPlug: 3. match role + permission
-        alt authorized
-            AuthzPlug->>Controller: 4. proceed
-        else denied
-            AuthzPlug-->>SDK: 403 Forbidden
-        end
+    Note over AuthzPlug: Authorization check
+    AuthzPlug->>AuthzPlug: 1. extract database + table from body
+    AuthzPlug->>Postgres: 2. check grants (user_id, db, table, permission)
+    Postgres-->>AuthzPlug: grants[]
+    AuthzPlug->>AuthzPlug: 3. match role + permission
+    alt authorized
+        AuthzPlug->>Controller: 4. proceed
+    else denied
+        AuthzPlug-->>SDK: 403 Forbidden
     end
 
     Controller->>DuckDB: scoped query (no auth)

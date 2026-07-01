@@ -820,7 +820,7 @@
         ],
         "summary": "Browser login (DRAFT — not yet implemented)",
         "security": [],
-        "description": "DRAFT. Browser login flow that authenticates a local (email/password) or WorkOS SSO user and sets a session cookie. API clients mint a pk_live_ token via POST /auth/token instead.",
+        "description": "DRAFT. Browser login flow that authenticates a user via their IdP (Google, WorkOS, or Okta) and sets a session cookie. Local service accounts are API-only (no password) — mint a pk_live_ token via POST /auth/token.",
         "requestBody": {
           "required": true,
           "content": {

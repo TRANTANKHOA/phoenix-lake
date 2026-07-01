@@ -242,6 +242,23 @@ DuckDB service (there is no per-run DuckDB process):
   changed, dbt fails with a clear error. The user fixes the model and pushes a
   new commit.
 
+## Scheduling and test results
+
+- **Triggers** — runs start on git push/webhook, a manual trigger from the UI, or
+  a per-project cron schedule. The cron expression is editable in the project's
+  dbt settings page (LiveView), stored on the project row, and enforced by Oban's
+  cron engine. Default is manual-only (no schedule), so nothing runs until the
+  user opts in.
+- **`dbt build` tests** — when a run uses `dbt build`, model tests execute after
+  each model. Pass/fail/skip counts and per-test failure messages are captured
+  from dbt's run-artifacts JSON, stored on the job row, and surfaced in the
+  run-detail LiveView (a Tests tab alongside Models). A failing test blocks that
+  model's downstream publishes per dbt's default indirect-selection semantics;
+  the user sees which tests failed and against which rows.
+- **Run history** — each run's status, duration, models built, and test results
+  are retained per project and shown in a runs list, with the latest outcome
+  broadcast over PubSub for live updates.
+
 ## Incremental models
 
 dbt Core v2 (Fusion) supports incremental strategies (`merge`, `append`,

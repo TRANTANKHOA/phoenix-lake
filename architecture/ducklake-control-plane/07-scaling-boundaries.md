@@ -28,6 +28,8 @@ database and is not a multi-tenant query server. This design handles that by:
   per-query memory/time limits (no shared mutable state across queries).
 - Serialising writers to one-per-table through Oban.
 - Throttling heavy work via separate Oban queues.
+- Target interactive-query **P95 < 5 s** (the synchronous deadline in
+  [02](02-phoenix-app.md)); slower queries are demoted to Oban jobs.
 
 That scales to bounded concurrency — tens of dashboards, a team of analysts. It
 does **not** scale to hundreds or thousands of simultaneous interactive tenants

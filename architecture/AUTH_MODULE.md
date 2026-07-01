@@ -67,7 +67,7 @@ end
 ```
 
 Users can be provisioned two ways:
-- **Admin creates** — local accounts (email/password or API-only)
+- **Admin creates** — local **service** accounts (API-token only; no password). Human sign-in is always via an IdP — the platform stores and verifies no passwords.
 - **IdP auto-provisions** — on first OAuth login, matching by email
 
 ### Token (API Keys)
@@ -330,6 +330,9 @@ config :phoenix_lake, :auth_providers,
     token_url: "/sso/token",
     user_url: "/sso/profiles",
     client_id: System.get_env("WORKOS_CLIENT_ID"),
+    # WorkOS has no separate OAuth "client secret": its server-side API Secret
+    # Key (sk_live_…) authorises management-API calls AND is passed as the
+    # OAuth2 client_secret in the SSO token-exchange leg. See the note below.
     client_secret: System.get_env("WORKOS_API_KEY"),
     authorization_params: [connection: System.get_env("WORKOS_CONNECTION_ID")]
   ],
@@ -340,6 +343,20 @@ config :phoenix_lake, :auth_providers,
     base_url: "https://#{System.get_env("OKTA_DOMAIN")}"
   ]
 ```
+
+**`WORKOS_API_KEY` semantics.** Unlike Google/Okta (which issue a per-app
+*client secret*), WorkOS has a single server-side secret: the **API Secret
+Key** (`sk_live_…`, from the WorkOS dashboard). It is not a browser/OAuth
+client secret in the traditional sense — it is the key the Phoenix server uses
+to call WorkOS management APIs (directory/group sync, user management). In the
+SSO/OAuth2 flow Assent sends it in the `client_secret` parameter of the
+`/sso/token` exchange (WorkOS accepts it there, or as HTTP Basic
+`client_id:api_key`), which is why it is read into the `client_secret:` slot
+above. Keep it server-side only — never expose it to the browser. This is the
+same value referenced as a deploy-time secret in
+`ducklake-control-plane.md` (it is injected from the secret manager, never
+committed in `config/{env}.yml`). ⚠ Verify the exact token-endpoint
+authentication scheme against current WorkOS SSO docs at build time.
 
 ### Group → role mapping
 
@@ -636,8 +653,14 @@ end
 ```elixir
 pipeline :browser do
   plug :fetch_session
+  plug :fetch_live_flash
+  plug :protect_from_forgery          # CSRF tokens for session-cookie requests
   plug PhoenixLakeWeb.Plugs.Auth
 end
+
+# CSRF scope: browser/session-cookie endpoints are protected by
+# :protect_from_forgery above + LiveView's own token validation. The API-token
+# path uses `Authorization: Bearer pk_live_...` (no cookie), so it is CSRF-exempt.
 
 pipeline :api do
   plug PhoenixLakeWeb.Plugs.Auth

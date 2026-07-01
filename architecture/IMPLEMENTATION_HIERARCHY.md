@@ -94,10 +94,13 @@ Interactive browser-based interface.
 User-provided dbt models executed by the platform.
 
 - Git repo sync (GitHub/GitLab webhooks)
-- `profiles.yml` generation
-- dbt run orchestration
+- `ducklake.yml` provisioning (landing/refining/reporting catalogs + retention)
+- `profiles.yml` generation (custom adapter → DuckDB service over HTTP)
+- dbt run orchestration (`transform` queue, per-project uniqueness)
 - Model validation (`source()` → landing, `ref()` → refining/reporting)
-- Snapshot management
+- `external` materialization for reporting (Parquet to `s3://.../reporting/`)
+- Test-result surfacing (`dbt build` tests in the LiveView UI)
+- Snapshot management + retention (maintenance queue)
 
 ### Phase 8: Production Hardening
 

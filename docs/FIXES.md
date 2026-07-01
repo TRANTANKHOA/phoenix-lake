@@ -4,14 +4,13 @@ Living progress tracker for `docs/AUDIT.md`. Updated as findings are resolved.
 Legend: ✅ fixed · ⚠️ flagged-verify · ⏸️ skipped-needs-decision · ⬜ pending.
 Already-done-this-session (C3, C4, C8, G11, S6) are re-verified and locked.
 
-**Pending owner confirmation:**
-- dbt adapter name (`dbt-duckdb` fork / `type: duckdb_service`) is a PLACEHOLDER — do not rename.
-- GitHub owner `TRANTANKHOA` (N2) — committing git user is `khoa.tran`; awaiting canonical owner.
+**Owner decisions resolved:**
+- dbt adapter name — keeping the placeholder `dbt-duckdb` fork / `type: duckdb_service` (owner confirmed, no rename).
+- GitHub owner — `TRANTANKHOA` confirmed via `git remote` (`origin = github.com/TRANTANKHOA/phoenix-lake`). `khoa.tran` is the local git committer name (`user.name`), not the repo owner, so footer links stay as `TRANTANKHOA`.
 
-**Deferred to build (⬜ below — future work / needs decision, not doc defects):**
-- Drift: D3 (dbt.html missing 09 sections), D4/D5/D6 (HTML-only content → markdown source of truth), D7, D11 (ui.html mockup links — acceptable), D13 (page-specific footer links).
-- Gaps: G1 (verify), G3, G6–G19 — build-time specs (engine versions, DuckLake catalog DDL, retention mechanism, S3/Postgres env + pooling, Phoenix↔DuckDB inter-service auth, PubSub adapter, config mechanism, TableLive/dbt-UI, local accounts, CSRF). Intentionally back-filled as the build firms up, per AUDIT.md. G2/G4/G5 are spec'd.
-- Minor: N2 (owner), N5–N13 — small wording / verify-against-current-docs items.
+**Status: all findings resolved except ⚠️ flagged-verify (need build-time confirmation).**
+- Drift: all D1–D13 resolved. Gaps: all G1–G19 spec'd. Minor: all N1–N13 resolved.
+- Remaining ⚠️ flagged-verify: C6 (DuckLake `AT (VERSION=>)` syntax), S11 (job-status enum — app tests still assert `succeed`), N4 (Job `worker` field).
 
 ## Critical
 - ✅ C3 — Phoenix↔DuckDB topology → HTTP service, dbt adapter over HTTP (locked)
@@ -42,50 +41,50 @@ Already-done-this-session (C3, C4, C8, G11, S6) are re-verified and locked.
 ## Drift (D1–D13)
 - ✅ D1 — api.html POST /query 202 schema restored (QueryJobResult) — `docs/api.html`
 - ✅ D2 — postgres.html duplicate removed (spurious "6 Ownership Rules" = duplicated Why-One-Postgres callout + Advantages card); section badges renumbered sequentially 1–11 (was 1,2,3,3,4,5,5,6,8,9,10). Markdown `04-postgres-ducklake.md` had no duplication — HTML-only defect — `docs/postgres.html`
-- ⬜ D3 — dbt.html missing sections
-- ⬜ D4 — engine/version settings HTML→markdown
-- ⬜ D5 — STORAGE_PATH / S3=default HTML→markdown
-- ⬜ D6 — app schema HTML→markdown
-- ⬜ D7 — DuckLake connector maturity text
+- ✅ D3 — dbt.html now mirrors 09-dbt-integration.md: added Template validation (8 rules), Platform execution profiles.yml block (custom adapter over HTTP, port 8080), dbt_project.yml catalog-mapping convention, and Incremental models section — `docs/dbt.html`
+- ✅ D4 — engine/version/settings recorded in markdown source of truth: DuckDB runtime settings table (`memory_limit` 4–8GB, `threads`=CPU, `access_mode=READ_ONLY`, `enable_progress_bar=false`) added to `03-duckdb-service.md` (Implementation → Runtime settings); `PostgreSQL 16 · single instance` added to `04-postgres-ducklake.md` intro; DuckDB engine `v1.5.2` anchored in `03-duckdb-service.md` (target-engine callout) — already present in `08-validation.md:35`. HTML already had all of these; no HTML edit needed, md/html now agree — `architecture/ducklake-control-plane/03-duckdb-service.md`, `04-postgres-ducklake.md`
+- ✅ D5 — `STORAGE_PATH` + "S3 = default" added to markdown source of truth: Storage adapter table gains a Role column (S3=`default`, local=`dev / edge`, azure=`Azure`) and a `STORAGE_BACKEND`/`STORAGE_PATH` env-var breakdown (S3 URI/prefix vs local dir). HTML already had both; no HTML edit, md/html now agree — `architecture/ducklake-control-plane/03-duckdb-service.md`
+- ✅ D6 — app schema moved into markdown source of truth: `04-postgres-ducklake.md` "App metadata" now enumerates the full Phoenix-owned schema (users, tokens, grants, datasets, tables, query_history, query_results, oban_jobs) with field types, incl. `last_used_at`; postgres.html tokens block backfilled with `last_used_at` (+ `expires_at` TTL note) so md/html agree — `architecture/ducklake-control-plane/04-postgres-ducklake.md`, `docs/postgres.html`
+- ✅ D7 — DuckLake connector maturity text re-rendered in postgres.html to match markdown source: connector list now includes Pandas ("1.0 client list: Spark, Trino, DataFusion, and Pandas") + "DuckLake 0.3 added Iceberg read/write interop" detail + "more mature choice today" — `docs/postgres.html`
 - ✅ D8 — stale duckdb.org → ducklake.select URLs (duckdb-service.html, s3.html, postgres.html)
 - ✅ D9 — "Zero JavaScript" → "Minimal JavaScript" (heading + body) — docs/phoenix.html
 - ✅ D10 — api.html back-arrow `content:"90"` → `\2190` — `docs/api.html`
-- ⬜ D11 — ui.html dead `href="#"` links
+- ✅ D11 — ui.html dead `href="#"` links left as-is (acceptable for a static visual mockup); added a one-line mockup banner under the topbar + HTML comment stating nav/action links are placeholders, not routed views — `docs/ui.html`
 - ✅ D12 — glossary Materialize/Reporting aligned to dbt `external` materialization (same root as S8) — `docs/glossary.html`
-- ⬜ D13 — footer source links page-specific
+- ✅ D13 — footer source links now page-specific: section pages (phoenix→02, duckdb-service→03, postgres→04, s3→05, data-flows→06, scaling→07, dbt→09) point "Design spec" at their own section markdown; cross-cutting pages (index/architecture/glossary/deployment) keep the root overview doc as their appropriate source; auth.html/ui.html already specific. "Full set" directory link retained — `docs/phoenix.html`, `docs/duckdb-service.html`, `docs/postgres.html`, `docs/s3.html`, `docs/data-flows.html`, `docs/scaling.html`, `docs/dbt.html`
 
 ## Gaps (G1–G19)
 - ✅ G11 — DuckDB INSTALL vs LOAD (locked)
-- ⬜ G1 — Phoenix→DuckDB wire protocol/port/auth (covered by C3; verify)
+- ✅ G1 — wire protocol/host/port now in markdown source of truth: HTTP transport was already in `02`/`03`; added a Connectivity note to `03-duckdb-service.md` (plain HTTP at `http://${DUCKDB_HOST}:${DUCKDB_PORT}`, `DUCKDB_PORT` default `8080`, no Postgres-wire / no binding — points to G12 for inter-service auth) + mirrored port/host into the duckdb-service.html Protocol spec row — `architecture/ducklake-control-plane/03-duckdb-service.md`, `docs/duckdb-service.html`
 - ✅ G2 — read-replica catalog ATTACH + freshness spec added — architecture/ducklake-control-plane/03-duckdb-service.md
-- ⬜ G3 — Phoenix/Elixir version
+- ✅ G3 — Phoenix/Elixir version pinned: "Target runtime: Phoenix 1.8 on Elixir 1.18 / Erlang OTP 27 (current as of mid-2026)" callout in `02-phoenix-app.md` (proposed — confirm against `mix.lock` at scaffold time; OTP 27 over 28 noted) + mirrored in phoenix.html. Matches D4's DuckDB v1.5.2 / PostgreSQL 16 pins — `architecture/ducklake-control-plane/02-phoenix-app.md`, `docs/phoenix.html`
 - ✅ G4 — expires_at persisted (schema + migration; removed `virtual: true`) + default TTL 90 days — architecture/AUTH_MODULE.md
 - ✅ G5 — token CRUD + /auth/* + /logout DRAFT stubs added (login/logout, GET+POST /auth/token, DELETE /auth/token/{id}) + Token/TokenCreated schemas — `docs/openapi.yaml`, `docs/api.html`
-- ⬜ G6 — DuckLake catalog physical schema
-- ⬜ G7 — retention mechanism/default/owner
-- ⬜ G8 — S3/MinIO/R2 credential + endpoint env vars
-- ⬜ G9 — Postgres app-DB vs catalog-DB boundary
-- ⬜ G10 — Postgres connection pooling
-- ⬜ G12 — Phoenix↔DuckDB inter-service auth
-- ⬜ G13 — PubSub adapter (multi-pod)
-- ⬜ G14 — config/{env}.yml vs env vars
-- ⬜ G15 — per-query memory limit vs container memory
-- ⬜ G16 — TableLive page
-- ⬜ G17 — dbt scheduling UI + test surfacing
-- ⬜ G18 — local email/password accounts
-- ⬜ G19 — CSRF protection
+- ✅ G6 — DuckLake catalog physical schema: "Catalog physical schema (proposed — ⚠ verify against DuckLake version)" subsection added to `04-postgres-ducklake.md` — DuckLake owns/auto-provisions the catalog (28 tables in DuckLake 0.4, one `METADATA_SCHEMA` per catalog); only catalog DDL Phoenix issues is `CREATE DATA CATALOG`/`ATTACH` + lake DDL via DuckDB; enumerates key catalog tables incl. `ducklake_data_file`, `ducklake_files_scheduled_for_deletion` (→ G7). Mirrored compactly in postgres.html catalog card. Bonus: corrected the partitioning-doc catalog query to real table names (`ducklake_file`→`ducklake_data_file`, join `ducklake_file_partition_value`, `table_name`) — `architecture/ducklake-control-plane/04-postgres-ducklake.md`, `10-partitioning-strategy.md`, `docs/postgres.html`
+- ✅ G7 — retention mechanism/default/owner: two-phase DuckLake maintenance (`ducklake_expire_snapshots` → `ducklake_files_scheduled_for_deletion` → `ducklake_cleanup_old_files` with a grace window), owned by Phoenix (`maintenance` queue → DuckDB service executes the `CALL`); defaults landing/refining 90 d, reporting 30 d, 7 d cleanup grace, daily cadence, per-catalog `snapshot_retention_days` config; marked proposed + verify-against-version (refs the current DuckLake maintenance docs) — `architecture/ducklake-control-plane/05-s3-storage.md`, `04-postgres-ducklake.md` (xref), `docs/s3.html`
+- ✅ G8 — S3/MinIO/R2 credential + endpoint env vars enumerated ("S3-compatible credentials & endpoints" subsection in `03-duckdb-service.md` + mirrored card in duckdb-service.html): `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`/`AWS_REGION`, `AWS_ENDPOINT_URL_S3` (MinIO/R2/LocalStack endpoint), `AWS_ALLOW_HTTP` (plaintext MinIO), `s3_url_style='path'` (MinIO path-style). Flags the two common setup failures (MinIO path-style, plain-HTTP reject) + proposed credential source (static keys default; IAM task role on AWS) — `architecture/ducklake-control-plane/03-duckdb-service.md`, `docs/duckdb-service.html`
+- ✅ G9 — Postgres app-DB vs catalog-DB boundary: "App vs catalog database boundary (proposed)" subsection in `04-postgres-ducklake.md` — same logical database (`phoenix_lake`), schema-qualified separation (`public` = app, `ducklake_*` = catalog); two roles (`phoenix_app`, `duckdb_catalog`) enforce the split at the DB; **no RLS** (deliberate — authz enforced in the Phoenix app layer under the "control plane is trusted" model). Mirrored in postgres.html catalog card + Access-control spec row — `architecture/ducklake-control-plane/04-postgres-ducklake.md`, `docs/postgres.html`
+- ✅ G10 — Postgres connection pooling: two independent pools spec'd. DuckDB→catalog via the `postgres` extension's small per-catalog backend pool (metadata-light, in-process cached, stays small; no PgBouncer on this path — session-level protocol features break under transaction mode) — "Postgres connection pooling (proposed)" subsection in `03-duckdb-service.md` + mirrored card in duckdb-service.html. Phoenix app→DB via Ecto/DBConnection (`DB_POOL_SIZE` default 10, shared with Oban; PgBouncer off by default, transaction-mode + prepared-statements-disabled only in front of `phoenix_app` when many pods exceed `max_connections`, never on the catalog path) — "Connection pooling (proposed)" subsection in `04-postgres-ducklake.md` + mirrored paragraph in postgres.html — `architecture/ducklake-control-plane/03-duckdb-service.md`, `04-postgres-ducklake.md`, `docs/duckdb-service.html`, `docs/postgres.html`
+- ✅ G12 — Phoenix↔DuckDB inter-service auth: "Phoenix↔DuckDB inter-service authentication (proposed — ⚠ verify at build)" section in `03-duckdb-service.md` — two layers (network isolation primary boundary via NetworkPolicy/security group on private port 8080; shared-secret `DUCKDB_SERVICE_TOKEN` bearer compared constant-time, `401` on failure). Trust = *authorization* delegated; caller *identity* still authenticated. Distinguishes the service's own IAM task role (outbound S3/RDS identity) from the inbound shared secret. Stricter mTLS/mesh alternative noted. Mirrored in duckdb-service.html "Caller auth" spec row — `architecture/ducklake-control-plane/03-duckdb-service.md`, `docs/duckdb-service.html`
+- ✅ G13 — PubSub adapter (multi-pod): "PubSub (multi-pod adapter)" section in `02-phoenix-app.md` — default `Phoenix.PubSub.PG2` over a clustered BEAM (libcluster Kubernetes DNS/EPMD, shared cookie), `Phoenix.PubSub.Postgres` (LISTEN/NOTIFY) fallback when the BEAM can't be clustered, Redis explicitly **not** added by default; choice load-bearing only at `phoenix.replicas > 1`. Mirrored as an "Adapter selection" card + proposed note in phoenix.html — `architecture/ducklake-control-plane/02-phoenix-app.md`, `docs/phoenix.html`
+- ✅ G14 — config/{env}.yml vs env vars reconciled: the two are complementary, not competing. `config/{env}.yml` = version-controlled source per environment (sizes, regions, bucket names, queue limits); environment variables = the **runtime interface** the Elixir release + DuckDB service read; a thin loader renders each `{env}.yml` into those vars at deploy time; secrets (`SECRET_KEY_BASE`, `WORKOS_API_KEY`, `DUCKDB_SERVICE_TOKEN`, DB/S3 creds) are injected from the secret manager into the same vars, never placed in the yml. Spec added to root `ducklake-control-plane.md` (Infrastructure) + mirrored as a note in deployment.html's Environment-variables card — `architecture/ducklake-control-plane.md`, `docs/deployment.html`
+- ✅ G15 — per-query vs container memory: "Per-query vs container memory (G15)" subsection in `03-duckdb-service.md` — DuckDB `memory_limit` is a **process-global** cap (not a per-query pragma; the deployment.html "Per-query" label was a misnomer, now corrected); sized at **6 GB** (~75% of the pod) on an **8 Gi / 4 CPU** pod, leaving ~2 Gi off-heap headroom (OS, Axum process, Parquet buffers, catalog cache); on overflow DuckDB **spills to its ephemeral-disk temp dir** (degrades to slow, not OOM); concurrency (transform queue ≤2) bounds how the budget is shared; marked proposed (confirm at build). Reconciled the contradiction: deployment.html `duckdb.memory` default `4Gi`→`8Gi` (now matches the architecture's 8GB/4CPU pod everywhere) and `DUCKDB_MEMORY_LIMIT` default `4GB`→`6GB` with corrected wording — `architecture/ducklake-control-plane/03-duckdb-service.md`, `docs/deployment.html`, `docs/duckdb-service.html`
+- ✅ G16 — TableLive page designed: dedicated `/datasets/:database/:table` deep-dive section (3b) in `UI_DESIGN.md` + mirrored page mock in ui.html. Snapshot selector drives the whole page (schema/stats/"Query at #N" all re-resolved against the chosen DuckLake `AT (VERSION => N)` snapshot — read-only time travel); schema viewer, stats (rows/files/size/partitions/S3 path), snapshot-history table with append/compact/retention deltas, recent-ingestions row; actions grant-gated (viewer=read-only, editor=ingest/export). Verified renders cleanly via preview.sh — `architecture/UI_DESIGN.md`, `docs/ui.html`
+- ✅ G17 — dbt scheduling UI + test surfacing: editable per-project cron (LiveView) + `dbt build` test results on the job row, shown in a Tests tab — `architecture/ducklake-control-plane/09-dbt-integration.md`, `docs/dbt.html`
+- ✅ G18 — local accounts scoped to API-only service accounts (no password; humans sign in via IdP); /auth/login realigned — `architecture/AUTH_MODULE.md`, `docs/openapi.yaml`, `docs/api.html`
+- ✅ G19 — CSRF: `:protect_from_forgery` + `fetch_live_flash` in the `:browser` pipeline; `SameSite=Strict` cookies; API-token path CSRF-exempt — `architecture/AUTH_MODULE.md`, `docs/auth.html`
 
 ## Minor (N1–N13)
 - ✅ N1 — hexdeps.pm → hexdocs.pm — architecture/AUTH_MODULE.md
-- ⬜ N2 — GitHub owner TRANTANKHOA (flag: pending owner confirmation)
+- ✅ N2 — GitHub owner TRANTANKHOA confirmed via git remote; `khoa.tran` is the local committer name. Links unchanged.
 - ✅ N3 — added 404 to /job/{job_id}/cancel and /retry — `docs/openapi.yaml`, `docs/api.html`
 - ⚠️ N4 — Job `worker` field kept (real oban_jobs column) + ⚠ verify note added — `docs/openapi.yaml`, `docs/api.html`
-- ⬜ N5 — WORKOS_API_KEY semantics
-- ⬜ N6 — snapshots granularity overstatement
-- ⬜ N7 — glossary DuckDB parallelism wording
-- ⬜ N8 — DuckLake version citations
-- ⬜ N9 — concurrency doc URL rotted
-- ⬜ N10 — PROJECT_STRUCTURE internal tooling dir
-- ⬜ N11 — IMPLEMENTATION_HIERARCHY Phase 7 dbt gaps
-- ⬜ N12 — multi-cloud S3 option
-- ⬜ N13 — autoscale SLA target
+- ✅ N5 — `WORKOS_API_KEY` semantics documented: WorkOS has no separate per-app OAuth client secret (unlike Google/Okta) — its single server-side **API Secret Key** (`sk_live_…`) both authorizes management-API calls (directory/group sync, user management) AND is passed in the `client_secret` slot of the Assent `/sso/token` exchange (WorkOS accepts it there, or as HTTP Basic `client_id:api_key`); server-side only; xref'd to the deploy-time secret in `ducklake-control-plane.md`; marked ⚠ verify the token-endpoint auth scheme at build. Inline comment + prose note added after the provider-config block — `architecture/AUTH_MODULE.md`. Markdown-only (auth.html's WorkOS card is a high-level provider summary with no env-var detail).
+- ✅ N6 — snapshot-granularity overstatement softened in `08-validation.md`: snapshots are cheap because they're catalog *rows* (not data copies), and granularity is at the **file** level (plus append/delete deltas tracked against those files) — unchanged files are *shared* across snapshots, not arbitrary sub-file byte ranges. Markdown-only doc (08 has no HTML counterpart) — `architecture/ducklake-control-plane/08-validation.md`
+- ✅ N7 — glossary DuckDB parallelism wording corrected in `glossary.html:66`: "can't shuffle across machines; concurrency bounded by RAM" → "single-node only — multi-threaded and uses every core, but can't shuffle work across machines (no distributed scale-out); workload bounded by one machine's RAM." Preserves the true limitation (no distributed scale-out) without implying DuckDB has no parallelism (it's a multi-threaded single-node engine). HTML-only doc (glossary has no markdown counterpart) — `docs/glossary.html`
+- ✅ N8 — DuckLake version/client-list claims marked illustrative (verify against current release notes) — `architecture/ducklake-control-plane/08-validation.md`
+- ✅ N9 — DuckDB concurrency URL corrected (`.html`) — `architecture/ducklake-control-plane/08-validation.md`
+- ✅ N10 — `.mimocode` internal tooling dir removed from PROJECT_STRUCTURE — `architecture/PROJECT_STRUCTURE.md`
+- ✅ N11 — IMPLEMENTATION_HIERARCHY Phase 7 expanded (ducklake.yml provisioning, external materialization, test surfacing, retention) — `architecture/IMPLEMENTATION_HIERARCHY.md`
+- ✅ N12 — multi-cloud clarified: S3-compatible (AWS S3; GCS via interop, Azure via the `azure` adapter) — `architecture/ducklake-control-plane.md`
+- ✅ N13 — autoscale SLA target stated: interactive-query P95 < 5s — `architecture/ducklake-control-plane/07-scaling-boundaries.md`, `docs/scaling.html`

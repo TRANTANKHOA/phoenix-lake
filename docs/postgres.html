@@ -153,6 +153,21 @@
         <li>Parquet file lists and statistics</li>
         <li>Partition information for pruning</li>
       </ul>
+      <p style="font-size:12px;color:#475569;margin:8px 0 4px;"><strong>Physical schema (proposed · ⚠ verify DuckLake version).</strong> DuckLake <em>owns and auto-provisions</em> the catalog — when a catalog is first created it materializes its standard 28 metadata tables (DuckLake 0.4) inside the catalog's <code>METADATA_SCHEMA</code>. Phoenix never writes DDL against <code>ducklake_*</code> tables directly; the only catalog DDL it issues is <code>CREATE DATA CATALOG</code> / <code>ATTACH</code> plus ordinary lake DDL routed through DuckDB.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;color:#475569;margin:6px 0;">
+        <tr style="background:#f1f5f9;"><th style="text-align:left;padding:4px 6px;">Postgres schema</th><th style="text-align:left;padding:4px 6px;">Catalog</th></tr>
+        <tr><td style="padding:4px 6px;"><code>ducklake_landing</code></td><td style="padding:4px 6px;">landing</td></tr>
+        <tr><td style="padding:4px 6px;"><code>ducklake_refining</code></td><td style="padding:4px 6px;">refining</td></tr>
+        <tr><td style="padding:4px 6px;"><code>ducklake_reporting</code></td><td style="padding:4px 6px;">reporting</td></tr>
+      </table>
+      <p style="font-size:11px;color:#64748b;margin:6px 0 0;">Key tables: <code>ducklake_table</code>, <code>ducklake_snapshot</code>, <code>ducklake_data_file</code>, <code>ducklake_file_column_stats</code>, <code>ducklake_partition_info</code>, <code>ducklake_files_scheduled_for_deletion</code> (retention). <a style="color:#7c3aed;" href="https://ducklake.select/docs/stable/specification/tables/overview.html">28-table spec ↗</a></p>
+      <p style="font-size:12px;color:#475569;margin:10px 0 4px;"><strong>App vs catalog boundary (proposed · ⚠ confirm at build time).</strong> Same logical database (<code>phoenix_lake</code>), schema-qualified separation: app metadata in <code>public</code>, catalog metadata in the three <code>ducklake_*</code> schemas. Two Postgres roles enforce the split so a leaked credential can't cross sides:</p>
+      <ul style="font-size:11px;color:#475569;margin:4px 0;padding-left:16px;line-height:1.7;">
+        <li><code>phoenix_app</code> — Phoenix/Ecto only; granted on <code>public</code>, <strong>no</strong> privileges on <code>ducklake_*</code>.</li>
+        <li><code>duckdb_catalog</code> — DuckDB service <code>postgres</code> extension only; granted on the <code>ducklake_*</code> schemas, <strong>no</strong> privileges on <code>public</code>.</li>
+      </ul>
+      <p style="font-size:11px;color:#64748b;margin:6px 0 0;"><strong>No Row-Level Security.</strong> Authorization is enforced in the Phoenix application layer (the <code>grants</code> table + role check in <code>validate_token</code>) under the locked "control plane is trusted" model — every access is already authorized before it reaches the DB. RLS is omitted as a deliberate simplicity trade-off, not forgotten; it can be layered in later as defense-in-depth.</p>
+      <p style="font-size:11px;color:#64748b;margin:6px 0 0;"><strong>Connection pooling (proposed).</strong> App DB via Phoenix's standard <strong>Ecto + DBConnection + postgrex</strong> pool under <code>phoenix_app</code> — <code>DB_POOL_SIZE</code> default <code>10</code> (10–20 per pod), shared with Oban; low-TPS metadata workload. <strong>PgBouncer off by default</strong>; add it in <strong>transaction mode</strong> in front of <code>phoenix_app</code> only when many Phoenix pods would exceed Postgres <code>max_connections</code>, and run Ecto with <strong>prepared statements disabled</strong> (<code>prepare: :unnamed</code>) — transaction mode is incompatible with named prepared statements. <strong>Never</strong> route the DuckDB→catalog path through it (session-level protocol, direct-only — see <code>03</code>); the two pools are independent and never share a pooler.</p>
     </div>
   </div>
 </div>
@@ -184,7 +199,8 @@
       <div><code>key_prefix</code> :string — first 8 chars for lookup</div>
       <div><code>name</code> :string — "CI pipeline", "dbt runner"</div>
       <div><code>scopes</code> :array — ["read", "write"]</div>
-      <div><code>expires_at</code> :utc_datetime — optional expiration</div>
+      <div><code>expires_at</code> :utc_datetime — default TTL 90 days; nil = no expiry</div>
+      <div><code>last_used_at</code> :utc_datetime — updated on each validation</div>
       <div><code>user_id</code> : FK → users</div>
     </div>
   </details>
@@ -262,7 +278,7 @@
       <div><code>errors</code> :jsonb — error history</div>
       <div><code>attempts</code> :integer</div>
       <div><code>scheduled_at</code> :timestamp</div>
-      <div style="margin-top:4px;color:#94a3b8;font-size:11px;">Managed by Oban library. Unique constraint on project_id for transform queue.</div>
+      <div style="margin-top:4px;color:#94a3b8;font-size:11px;">Managed by Oban library. Oban unique plugin enqueues at most one transform job per project_id.</div>
     </div>
   </details>
 </div>
@@ -278,9 +294,12 @@
 
 <div class="algo-card">
   <p class="algo-card-title">Database creation</p>
-  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>CREATE DATABASE landing   (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/landing/');
-CREATE DATABASE refining  (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/refining/');
-CREATE DATABASE reporting (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/reporting/');</code></pre>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS landing
+  (DATA_PATH 's3://&lt;bucket&gt;/landing/', METADATA_SCHEMA 'ducklake_landing');
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS refining
+  (DATA_PATH 's3://&lt;bucket&gt;/refining/', METADATA_SCHEMA 'ducklake_refining');
+ATTACH 'ducklake:postgres:dbname=phoenix_lake' AS reporting
+  (DATA_PATH 's3://&lt;bucket&gt;/reporting/', METADATA_SCHEMA 'ducklake_reporting');</code></pre>
 </div>
 
 <div class="split-grid">
@@ -323,10 +342,10 @@ CREATE DATABASE reporting (TYPE ducklake, DATA_PATH 's3://&lt;bucket&gt;/reporti
   <p class="diagram-title">Write-then-publish invariant</p>
   <div class="mermaid">
 sequenceDiagram
-    participant Oban as Oban Worker (Phoenix)
+    participant Oban as "Oban Worker (Phoenix)"
     participant LB as Load Balancer
     participant DuckDB as DuckDB Service
-    participant Storage as S3 / Local
+    participant Storage as "S3 / Local"
     participant Postgres
 
     Oban->>LB: 1. submit SQL (COPY INTO, etc.)
@@ -363,7 +382,7 @@ sequenceDiagram
     <div class="spec-row"><span class="spec-key">Transaction consistency</span><span class="spec-val">ACID</span><span>Catalog update is one Postgres transaction — never orphaned files or phantom snapshots.</span></div>
     <div class="spec-row"><span class="spec-key">No extra service</span><span class="spec-val">−1 component</span><span>No Glue, no standalone metastore to deploy and maintain.</span></div>
     <div class="spec-row"><span class="spec-key">Backup</span><span class="spec-val">pg_dump / PITR</span><span>One backup strategy covers both app metadata and catalog.</span></div>
-    <div class="spec-row"><span class="spec-key">Access control</span><span class="spec-val">Postgres roles</span><span>Same RBAC for app tables and catalog tables.</span></div>
+    <div class="spec-row"><span class="spec-key">Access control</span><span class="spec-val">Postgres roles</span><span>Two roles (<code>phoenix_app</code>, <code>duckdb_catalog</code>) keep app and catalog privileges apart; authorization enforced in-app (no RLS).</span></div>
   </div>
 </div>
 
@@ -373,16 +392,7 @@ sequenceDiagram
   Snapshots & Cleanup
 </h2>
 
-<div class="algo-card">
-  <p class="algo-card-title">Lifecycle</p>
-  <ol class="algo-steps">
-    <li>Each published snapshot references a specific set of files. Older snapshots keep referencing their older files, enabling time travel.</li>
-    <li>A retention policy expires old snapshots. Once no live snapshot references a file, a cleanup job deletes it from storage.</li>
-    <li>Cleanup is always catalog-driven: a file is deleted only after the catalog confirms nothing points at it.</li>
-    <li>Staging files are cleaned up by the ingestion worker after promotion or on a TTL-based sweep.</li>
-    <li>Each database can have independent retention — landing may keep 90 days while reporting keeps 30.</li>
-  </ol>
-</div>
+<div class="info info-blue">See <a style="color:#3b82f6;" href="s3.html#snapshots-cleanup">Storage — Snapshots &amp; Cleanup</a> for the full lifecycle, retention defaults, and maintenance SQL.</div>
 
 <!-- ==================== OWNERSHIP ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
@@ -406,7 +416,7 @@ sequenceDiagram
   Maturity Caveat
 </h2>
 
-<div class="info info-yellow">DuckLake's catalog format is young. Third-party connectors (Spark, Trino, DataFusion) are emerging but most are work-in-progress. Native reads from Athena, Snowflake, and BigQuery aren't there yet. For broad multi-engine interop, Iceberg remains more mature.</div>
+<div class="info info-yellow">DuckLake's catalog format is young. Third-party connectors are emerging — DuckLake's 1.0 client list includes Spark, Trino, DataFusion, and Pandas, and DuckLake 0.3 added Iceberg read/write interop — but most are work-in-progress. Native reads from Athena, Snowflake, and BigQuery aren't there yet. For broad, production multi-engine interop, Iceberg remains the more mature choice today.</div>
 
 <!-- ==================== REGISTRY SYNC ==================== -->
 <h2 style="display:flex;align-items:center;gap:8px;">
@@ -552,7 +562,7 @@ sequenceDiagram
 </main>
 
 <footer class="site-footer">
-  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/04-postgres-ducklake.md">04-postgres-ducklake.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
 </footer>
 
 <script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>

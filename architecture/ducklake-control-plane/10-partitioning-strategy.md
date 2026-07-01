@@ -132,17 +132,20 @@ Check for partitions that are too small or too large:
 
 ```sql
 -- List partition sizes by querying the DuckLake catalog metadata directly.
--- DuckLake exposes its catalog as standard SQL tables (ducklake_file, ducklake_table, ...)
--- ⚠ verify column names against the current DuckLake v1.0 catalog spec
+-- DuckLake exposes its catalog as standard SQL tables (ducklake_data_file,
+-- ducklake_table, ...) — see 04-postgres-ducklake.md "Catalog physical schema".
+-- ⚠ verify column names against the installed DuckLake (0.4) catalog spec
 --    (https://ducklake.select/docs/stable/specification/tables/overview.html — 28 tables);
---    the names below are illustrative of the shape, not a guaranteed schema.
+--    the names below are the reference shape, not a guaranteed schema.
+-- Partition values live in ducklake_file_partition_value, not on ducklake_data_file itself.
 SELECT
-  partition_value,
+  fpv.partition_value,
   COUNT(*) AS file_count,
-  SUM(file_size_bytes) / 1024 / 1024 AS size_mb
-FROM ducklake_file
-WHERE table_id = (SELECT table_id FROM ducklake_table WHERE name = 'events')
-GROUP BY partition_value
+  SUM(df.file_size_bytes) / 1024 / 1024 AS size_mb
+FROM ducklake_file_partition_value fpv
+JOIN ducklake_data_file df USING (data_file_id)
+WHERE df.table_id = (SELECT table_id FROM ducklake_table WHERE table_name = 'events')
+GROUP BY fpv.partition_value
 ORDER BY size_mb DESC;
 ```
 

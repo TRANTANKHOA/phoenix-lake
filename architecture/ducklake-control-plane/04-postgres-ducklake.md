@@ -1,20 +1,57 @@
 # 04 — Postgres & DuckLake catalog
 
-One Postgres instance serves two roles: the application database and the
-DuckLake catalog. Every project gets three DuckLake catalogs (landing, refining,
-reporting). Keeping them together is a deliberate simplification.
+One Postgres instance — **PostgreSQL 16, single instance** — serves two roles:
+the application database and the DuckLake catalog. Every project gets three
+DuckLake catalogs (landing, refining, reporting). Keeping them together is a
+deliberate simplification. (16 is the pinned major version; a single instance is
+the locked deployment shape — see [07 — Scaling boundaries](07-scaling-boundaries.md).)
 
 ## App metadata
 
-The control-plane state described in [02](02-phoenix-app.md):
+The control-plane state described in [02](02-phoenix-app.md). Phoenix owns these
+tables; DuckLake's catalog tables (snapshots, data files, …) are managed
+internally by the extension and are never read or written by Phoenix — clean
+separation, no overlap. This is read and written by Phoenix on every request and
+job.
 
-- Users, sessions, roles, grants.
-- Dataset/table registrations (the user-facing list of what exists and who may
-  see it).
-- Query history and results metadata.
-- Oban job rows.
+**Users & Auth** (canonical schema in [AUTH_MODULE](../AUTH_MODULE.md))
 
-This is read and written by Phoenix on every request and job.
+- `users` — `email` (unique, indexed), `name` (from IdP or admin), `role`
+  (admin | editor | viewer), `provider` (google | workos | okta | local),
+  `provider_uid` (IdP's unique user ID), `active` (default: true).
+- `tokens` — `key_hash` (bcrypt, never plaintext), `key_prefix` (first 8 chars
+  for prefix lookup), `name` ("CI pipeline", "dbt runner"), `scopes`
+  (["read", "write"]), `expires_at` (default TTL 90 days; nil = no expiry),
+  `last_used_at` (updated on each validation), `user_id` → `users`.
+- `grants` — `database` ("landing" | "refining" | "reporting" | "*"), `table`
+  (table name or "*" for all), `permission` (read | write | admin),
+  `user_id` → `users`.
+
+**Dataset & Table registry**
+
+- `datasets` — `name` (unique display name), `description` (optional),
+  `database` (landing | refining | reporting), `created_by` → `users`.
+- `tables` — `dataset_id` → `datasets`, `table_name` (unique per dataset),
+  `schema_json` (jsonb column definitions), `row_count`, `size_bytes`,
+  `updated_at`.
+
+**Query & Results metadata**
+
+- `query_history` — `user_id` → `users`, `sql` (submitted SQL), `database`
+  (target database), `status` (pending | running | completed | failed),
+  `duration_ms`, `row_count`, `started_at`, `completed_at`.
+- `query_results` — `query_id` → `query_history`, `result_url` (S3 presigned URL
+  to Parquet), `column_types` (jsonb column-type info), `row_count`,
+  `size_bytes`. Actual data lives in S3, not Postgres.
+
+**Oban (built-in)**
+
+- `oban_jobs` — `queue` (interactive | ingest | transform | maintenance),
+  `state` (available | executing | completed | retryable), `args` (jsonb job
+  arguments), `errors` (jsonb error history), `attempts`, `scheduled_at`.
+  Managed by the Oban library; unique constraint on `project_id` for the
+  transform queue (one dbt run per project at a time — see
+  [03](03-duckdb-service.md)).
 
 ## DuckLake catalog
 
@@ -46,6 +83,50 @@ Each catalog holds:
 A query resolves a table to its current snapshot by reading the appropriate
 catalog, which tells DuckDB exactly which S3 files to scan.
 
+### Catalog physical schema (proposed — ⚠ verify against DuckLake version)
+
+DuckLake **owns and auto-provisions** its catalog schema — Phoenix never
+hand-writes or directly reads/writes the `ducklake_*` catalog tables. When a
+catalog is first created, DuckLake materializes its standard set of metadata
+tables **inside the configured `METADATA_SCHEMA`** in Postgres. The only DDL
+the platform issues against a catalog is the provisioning statement below plus
+ordinary lake DDL (`CREATE TABLE`, `INSERT`, `DELETE`, `DROP TABLE`) routed
+**through DuckDB**, which in turn updates the catalog tables transactionally.
+
+```sql
+-- ⚠ verify exact syntax against the current DuckLake (0.4) docs.
+-- CREATE DATA CATALOG provisions the 28 metadata tables inside METADATA_SCHEMA.
+-- On subsequent process starts the same catalog is re-opened with ATTACH (above).
+CREATE DATA CATALOG 'ducklake:postgres:dbname=phoenix_lake' AS landing
+  (DATA_PATH 's3://<bucket>/landing/', METADATA_SCHEMA 'ducklake_landing');
+```
+
+**Physical layout in Postgres** — one schema per catalog, each holding the same
+standard set of catalog tables (DuckLake 0.4 = 28 tables):
+
+| Postgres schema | Catalog | Holds metadata for |
+|-----------------|---------|---------------------|
+| `ducklake_landing` | landing | `s3://<bucket>/landing/` tables/snapshots |
+| `ducklake_refining` | refining | `s3://<bucket>/refining/` tables/snapshots |
+| `ducklake_reporting` | reporting | `s3://<bucket>/reporting/` tables/snapshots |
+
+**Key catalog tables DuckLake creates** (full 28-table spec:
+<https://ducklake.select/docs/stable/specification/tables/overview.html>):
+
+- `ducklake_table` / `ducklake_column` — table + column definitions and schema-evolution history.
+- `ducklake_snapshot` / `ducklake_snapshot_changes` — one row per table version, with author + commit message.
+- `ducklake_data_file` — the Parquet file manifest (path, `record_count`, `file_size_bytes`, partition id) for each snapshot.
+- `ducklake_file_column_stats` — per-file min/max/null counts used for pruning.
+- `ducklake_partition_info` / `ducklake_file_partition_value` — partition layout for pruning.
+- `ducklake_table_stats` — rolled-up table-level row count and size.
+- `ducklake_files_scheduled_for_deletion` — files staged for physical removal (the input to the two-phase retention job defined in [§05 — Retention](05-s3-storage.md#retention--mechanism-defaults-and-owner)).
+
+> **Proposed, not yet built.** The catalog schema is owned by the DuckLake
+> extension and is whatever DuckLake 0.4 (or the version pinned at build) emits;
+> the table list above is the reference shape for the example catalog queries
+> elsewhere in these docs, and must be re-verified against the installed
+> DuckLake version before any code depends on a specific column name.
+
 > **Terminology — catalog vs database.** In DuckLake, a *catalog* is what you
 > `ATTACH` (here `landing`, `refining`, `reporting`) — the attached lake with its
 > tables and snapshots. A *catalog database* is the SQL backend that stores that
@@ -53,6 +134,65 @@ catalog, which tells DuckDB exactly which S3 files to scan.
 > under the `database` resource and `database` field name (e.g.
 > `database: "landing"`); there, "database" means "a DuckLake catalog," not a
 > Postgres database.
+
+### App vs catalog database boundary (proposed)
+
+App metadata and the DuckLake catalog live in the **same logical Postgres
+database** (`phoenix_lake`) — one database, not two. Separation is
+**schema-qualified**, not database-qualified:
+
+| Postgres schema | Owner | What lives here |
+|-----------------|-------|-----------------|
+| `public` | Phoenix | `users`, `tokens`, `grants`, `datasets`, `tables`, `query_history`, `query_results`, `oban_jobs` |
+| `ducklake_landing` | DuckLake extension (via DuckDB) | landing catalog tables (snapshots, data files, …) |
+| `ducklake_refining` | DuckLake extension (via DuckDB) | refining catalog tables |
+| `ducklake_reporting` | DuckLake extension (via DuckDB) | reporting catalog tables |
+
+**Role separation (proposed — ⚠ confirm at build time).** Two Postgres roles
+enforce the boundary at the DB so a credential leak on one side cannot cross to
+the other:
+
+- `phoenix_app` — used only by Phoenix (Ecto). Granted on `public`; **no
+  privileges** on the `ducklake_*` schemas. Phoenix never reads or writes the
+  catalog tables directly.
+- `duckdb_catalog` — used only by the DuckDB service's `postgres` extension when
+  it attaches the catalogs. Granted on the three `ducklake_*` schemas; **no
+  privileges** on `public`.
+
+**Row-Level Security — deliberately not used.** Authorization is enforced in the
+Phoenix application layer (the `grants` table + the role check in
+`validate_token`, see [AUTH_MODULE](../AUTH_MODULE.md)), consistent with the
+locked "control plane is trusted" model: Phoenix authenticates the caller and
+checks grants before issuing any SQL, so every catalog/data access has already
+been authorized by the time it reaches the DB. RLS is omitted as a deliberate
+simplicity trade-off rather than forgotten; it can be layered in later as
+defense-in-depth if a multi-tenant or shared-DB deployment ever needs it.
+
+> **Proposed, not yet built.** The two-role split and the no-RLS posture are the
+> reference boundary; the exact role names and grant scripts are finalized when
+> the `phoenix_lake` database is provisioned.
+
+### Connection pooling (proposed)
+
+The app database is reached through Phoenix's standard **Ecto + DBConnection +
+postgrex** pool, under the `phoenix_app` role. It is a low-TPS metadata workload
+(auth + grant checks, dataset/table rows, `query_history`, Oban jobs), so the
+pool is small and Oban shares the same repo pool:
+
+| Concern | Default | Why |
+|---------|---------|-----|
+| Pool size | `DB_POOL_SIZE` (default `10`). Size 10–20 per pod. | Control-plane metadata ops are cheap and bursty; 10–20 covers API + LiveView + Oban from one pod. |
+| PgBouncer | **Off by default.** Optional, **transaction mode**, in front of the `phoenix_app` role only. | A single Postgres instance absorbs the control plane at the locked scale. Add PgBouncer only when many Phoenix pods (each holding a 10–20 pool) would exceed Postgres `max_connections`. |
+| Prepared statements under PgBouncer | If PgBouncer is enabled, run Ecto with **prepared statements disabled** (`prepare: :unnamed`). | Transaction-mode PgBouncer is incompatible with named prepared statements — Ecto will fail without this. |
+| PgBouncer in front of the **catalog** path | **Never.** | The DuckDB→catalog path uses session-level protocol features and is direct-only — see [03 → Postgres connection pooling](03-duckdb-service.md#postgres-connection-pooling-proposed--verify-at-build). |
+
+The DuckDB→catalog pool lives on the `duckdb_catalog` role and is sized in
+[03](03-duckdb-service.md#postgres-connection-pooling-proposed--verify-at-build);
+the two pools are independent and never share a pooler.
+
+> **Proposed, not yet built.** Pool defaults and the PgBouncer posture are the
+> reference configuration; finalize `DB_POOL_SIZE` and Postgres `max_connections`
+> against the real pod count and Oban concurrency at scaffold time.
 
 ## Why one Postgres
 

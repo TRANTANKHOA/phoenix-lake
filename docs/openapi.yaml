@@ -47,7 +47,11 @@ paths:
                       $ref: '#/components/schemas/Database'
     post:
       tags: [Databases]
-      summary: Create a database
+      summary: 'Create a database (DRAFT — not yet implemented)'
+      description: |
+        The three DuckLake catalogs (landing, refining, reporting) are
+        created automatically by the platform. This endpoint is reserved
+        for future use or administrative tooling.
       requestBody:
         required: true
         content:
@@ -85,7 +89,7 @@ paths:
           $ref: '#/components/responses/NotFound'
     put:
       tags: [Databases]
-      summary: Update a database
+      summary: 'Update a database (DRAFT — not yet implemented)'
       parameters:
         - name: database
           in: path
@@ -111,7 +115,7 @@ paths:
           $ref: '#/components/responses/BadRequest'
     delete:
       tags: [Databases]
-      summary: Delete a database
+      summary: 'Delete a database (DRAFT — not yet implemented)'
       parameters:
         - name: database
           in: path
@@ -468,9 +472,10 @@ paths:
       summary: Browser login (DRAFT — not yet implemented)
       security: []   # this is how a session/token is obtained; no bearer required
       description: |
-        DRAFT endpoint. Browser login flow that authenticates a local
-        (email/password) or WorkOS SSO user and sets a session cookie. API
-        clients instead mint a `pk_live_` token via `POST /auth/token`.
+        DRAFT endpoint. Browser login flow that authenticates a user via
+        their IdP (Google, WorkOS, or Okta) and sets a session cookie. Local
+        service accounts are API-only (no password) — mint a `pk_live_` token
+        via `POST /auth/token`.
       requestBody:
         required: true
         content:
@@ -585,6 +590,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: |
+        Returns 200 if the service can accept traffic (DuckDB, Postgres,
+        and S3 all reachable). Used by K8s/ECS readiness probes; remove
+        from load balancer if failing.
+      security: []   # public — no bearer token required
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Service not ready
 
 components:
   schemas:

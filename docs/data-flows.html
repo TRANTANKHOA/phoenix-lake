@@ -162,7 +162,7 @@
     <!-- DuckDB -->
     <rect x="270" y="50" width="100" height="50" rx="6" fill="#1d4ed8"/>
     <text x="320" y="72" font-size="9" fill="white" text-anchor="middle">DuckDB</text>
-    <text x="320" y="86" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">timeout: 30s</text>
+    <text x="320" y="86" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">sync: 5s / kill: 30s</text>
     
     <!-- Decision -->
     <polygon points="410,75 440,55 470,75 440,95" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
@@ -194,8 +194,8 @@
 
 <div class="stat-grid" style="grid-template-columns: repeat(3, 1fr);">
   <div class="stat">
-    <span class="num" style="font-size:16px;">≤30s</span>
-    <span class="label">Sync timeout</span>
+    <span class="num" style="font-size:16px;">5s / 30s</span>
+    <span class="label">Sync deadline / hard kill</span>
   </div>
   <div class="stat">
     <span class="num" style="font-size:16px;">202</span>
@@ -277,7 +277,7 @@
 </main>
 
 <footer class="site-footer">
-  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/06-data-flows.md">06-data-flows.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
 </footer>
 
 <script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>

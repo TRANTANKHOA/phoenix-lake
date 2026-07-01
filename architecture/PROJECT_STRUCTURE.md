@@ -155,12 +155,6 @@ phoenix-lake/
 │       ├── deploy-pages.yml         # GitHub Pages (docs)
 │       ├── ci.yml                   # Lint + test
 │       └── release.yml              # Build + push images
-├── .mimocode/
-│   └── skills/
-│       ├── align-html/SKILL.md
-│       └── git/
-│           ├── SKILL.md
-│           └── git.py
 ├── .gitignore
 ├── validate_openapi.py
 └── README.md

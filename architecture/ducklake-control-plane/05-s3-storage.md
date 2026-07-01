@@ -75,6 +75,49 @@ refresh.
 - Each catalog can have independent retention and compaction policies — landing
   may keep 90 days of snapshots while reporting keeps 30.
 
+### Retention — mechanism, defaults, and owner
+
+Retention is a two-phase DuckLake maintenance job, run per catalog:
+
+1. **Snapshot expiry.** `CALL ducklake_expire_snapshots('<catalog>',
+   older_than => now() - INTERVAL '<retention>')` is the only way data is
+   physically removed from DuckLake — it drops the time-travel reference to
+   snapshots older than the retention window. (Both phases accept
+   `dry_run => true` for a pre-flight report.)
+2. **File cleanup.** Expiring snapshots does *not* delete files on its own: files
+   no longer referenced by any live snapshot are first staged in
+   `ducklake_files_scheduled_for_deletion`, then
+   `CALL ducklake_cleanup_old_files('<catalog>', older_than => now() - INTERVAL '<grace>')`
+   physically deletes them after a grace window so in-flight reads stay safe.
+
+**Owner.** Per the locked topology, Phoenix schedules these as Oban cron jobs on
+the `maintenance` queue and submits the SQL over HTTP; the long-running DuckDB
+service — which holds the catalog writer handle — executes the `CALL`. Staging
+files fall outside this path: the ingestion worker sweeps them on a TTL.
+
+**Defaults (proposed — confirm at build).**
+
+| Catalog | Snapshot retention | Rationale |
+|---------|--------------------|-----------|
+| landing | 90 days | raw source of truth; long time-travel / recovery window |
+| refining | 90 days | matches landing; a bad dbt run stays recoverable |
+| reporting | 30 days | rebuilt on a cadence; short history suffices |
+
+- **File-cleanup grace:** 7 days after a file is staged for deletion (DuckLake
+  recommends "more than a few days"; 7 d exceeds any expected read transaction).
+- **Cadence:** daily, in the maintenance window.
+- **Config:** `snapshot_retention_days` per catalog plus a global
+  `file_cleanup_grace_days`, in config (env-overridable), surfaced in the catalog
+  admin UI.
+
+> **Verify against the installed DuckLake version.** The
+> `ducklake_expire_snapshots` / `ducklake_cleanup_old_files` table functions and
+> the `ducklake_files_scheduled_for_deletion` table are the current DuckLake
+> maintenance APIs
+> (<https://ducklake.select/docs/stable/duckdb/maintenance/expire_snapshots.html>,
+> <https://ducklake.select/docs/stable/duckdb/maintenance/cleanup_old_files.html>);
+> re-confirm signatures against the pinned version before code depends on them.
+
 ## Why this is cheap and scalable
 
 Storage is fully decoupled from compute. Data volume grows on S3 independently of

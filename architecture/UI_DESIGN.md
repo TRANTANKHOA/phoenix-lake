@@ -121,9 +121,75 @@ Explore databases, tables, schemas.
 
 **LiveView:** `DatasetsLive`
 - Click database → list tables
-- Click table → show schema, stats, partition info
+- Click table → route to `/datasets/:database/:table` (TableLive, below)
 - Schema viewer with column types and descriptions
 - Snapshot history (time travel)
+
+### 3b. Table Detail (TableLive)
+
+Routed single-table deep-dive — the page a table name links to from the
+Dataset Browser, Query results, and Jobs. This is the "time travel" surface:
+pick a snapshot and the schema/stats/query actions all reflect that version.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Datasets › landing › orders                    [user]          │
+├─────────────────────────────────────────────────────────────────┤
+│  orders   (last ingested 2m ago · snapshot #1,847)              │
+│                                                                 │
+│  Snapshot: [1,847 (current) ▾]   ⬚ Time travel                 │
+│                                                                 │
+│  [Query at #1,847]  [Ingest data]  [Export Parquet/CSV]        │
+│                                                                 │
+│  ── Schema ─────────────────────────────────────────────────── │
+│  ┌────────────┬───────────┬────────┬──────────┬──────────────┐ │
+│  │ Column     │ Type      │ Null   │ Partition │ Description │ │
+│  ├────────────┼───────────┼────────┼──────────┼──────────────┤ │
+│  │ id         │ BIGINT    │ no     │          │ Order id     │ │
+│  │ user_id    │ BIGINT    │ no     │          │ FK → users   │ │
+│  │ total      │ DECIMAL   │ no     │          │ Order total  │ │
+│  │ status     │ VARCHAR   │ yes    │          │ order state  │ │
+│  │ created_at │ TIMESTAMP │ no     │ ✓ y/m/d  │ partition key│ │
+│  └────────────┴───────────┴────────┴──────────┴──────────────┘ │
+│                                                                 │
+│  ── Stats (#1,847) ────────────────────────────────────────── │
+│  847,293 rows · 234 files · 1.2 GB · 12 partitions             │
+│  storage: s3://phoenix-lake/landing/orders/                    │
+│                                                                 │
+│  ── Snapshot history ──────────────────────────────────────── │
+│  ┌────────┬─────────────────┬────────┬────────┬──────────────┐ │
+│  │ Snap   │ Written         │ Rows   │ Files  │ Change       │ │
+│  ├────────┼─────────────────┼────────┼────────┼──────────────┤ │
+│  │ #1,847 │ 2026-06-28 14:02│ 847,293│ 234    │ +1,204 (app) │ │
+│  │ #1,846 │ 2026-06-28 09:15│ 846,089│ 232    │ +880 (app)   │ │
+│  │ #1,845 │ 2026-06-27 21:30│ 845,209│ 231    │ compact (×4) │ │
+│  │ #1,840 │ 2026-06-26 03:00│ 842,011│ 240    │ retention ✓  │ │
+│  └────────┴─────────────────┴────────┴────────┴──────────────┘ │
+│                                                                 │
+│  ── Recent ingestions ───────────────────────────────────────  │
+│  abc.parquet  ✅ done  12,847 rows  2m ago   [Job #847]       │
+│  def.parquet  🟢 run   —          running   [Job #849]       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**LiveView:** `TableLive` (`/datasets/:database/:table`, session + grant)
+- **Snapshot selector** drives the whole page — schema, stats, and the
+  "Query at #N" action are all re-resolved against the chosen DuckLake
+  snapshot (`AT (VERSION => N)`), enabling read-only time travel without
+  mutating the table's current state.
+- Schema viewer uses the `SchemaViewer` component (column type + partition
+  marker, same as the Dataset Browser).
+- Stats row reads from the DuckLake catalog (`ducklake_table`,
+  `ducklake_data_file` aggregates — see `10-partitioning-strategy.md`);
+  rows/size reflect the selected snapshot, not just `current`.
+- Snapshot history lists recent snapshots with row/file delta and the
+  mutation kind (append / compact / retention sweep — refs G7); selecting
+  a row updates the selector.
+- **Recent ingestions** filters `query_history`/Oban jobs to this table
+  and links into the Job Monitor.
+- Actions are **grant-gated**: viewers get read-only (query/time-travel);
+  editors also see Ingest / Export. A 403 surfaces as the `--color-error`
+  banner, consistent with the global authz model.
 
 ### 4. Job Monitor
 

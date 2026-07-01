@@ -42,7 +42,7 @@
 
 <main>
 <h1>Storage</h1>
-<p class="subtitle">Pluggable Parquet storage. S3, local disk, or Azure Blob — the adapter is swappable via config. Three enforced layers: staging, landing, refining, reporting.</p>
+<p class="subtitle">Pluggable Parquet storage. S3, local disk, or Azure Blob — the adapter is swappable via config. Three enforced DuckLake databases (landing, refining, reporting), plus a staging prefix.</p>
 
 <div class="stat-grid">
   <div class="stat"><span class="num">3</span><span class="label">Storage backends</span></div>
@@ -247,6 +247,31 @@
   </ol>
 </div>
 
+<div class="algo-card">
+  <p class="algo-card-title">Retention — mechanism, defaults &amp; owner</p>
+  <p style="margin:8px 0;color:#475569;">Two-phase DuckLake maintenance, run per catalog (both phases accept <code>dry_run =&gt; true</code>):</p>
+  <ol class="algo-steps">
+    <li><strong>Snapshot expiry</strong> — <code>CALL ducklake_expire_snapshots('&lt;catalog&gt;', older_than =&gt; now() - INTERVAL '&lt;retention&gt;')</code>. The only way data is physically removed: it drops the time-travel reference to old snapshots.</li>
+    <li><strong>File cleanup</strong> — expired-but-unreferenced files are first staged in <code>ducklake_files_scheduled_for_deletion</code>, then <code>CALL ducklake_cleanup_old_files('&lt;catalog&gt;', older_than =&gt; now() - INTERVAL '&lt;grace&gt;')</code> deletes them after a grace window so in-flight reads stay safe.</li>
+  </ol>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+    <thead>
+      <tr style="border-bottom:2px solid #e2e8f0;">
+        <th style="text-align:left;padding:6px;color:#64748b;">Catalog</th>
+        <th style="text-align:left;padding:6px;color:#64748b;">Snapshot retention</th>
+        <th style="text-align:left;padding:6px;color:#64748b;">Rationale</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:6px;">landing</td><td style="padding:6px;">90 days</td><td style="padding:6px;color:#64748b;">raw source of truth; long recovery window</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:6px;">refining</td><td style="padding:6px;">90 days</td><td style="padding:6px;color:#64748b;">matches landing; a bad dbt run stays recoverable</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:6px;">reporting</td><td style="padding:6px;">30 days</td><td style="padding:6px;color:#64748b;">rebuilt on a cadence; short history suffices</td></tr>
+    </tbody>
+  </table>
+  <p style="margin:8px 0 4px;color:#475569;"><strong>Owner:</strong> Phoenix schedules these as Oban cron jobs on the <code>maintenance</code> queue and submits the SQL over HTTP; the long-running DuckDB service (catalog writer) executes the <code>CALL</code>. <strong>Grace:</strong> 7 days. <strong>Cadence:</strong> daily. <strong>Config:</strong> <code>snapshot_retention_days</code> per catalog + global <code>file_cleanup_grace_days</code> (env-overridable).</p>
+  <p style="margin:4px 0 0;font-size:12px;color:#94a3b8;">⚠ Verify the <code>ducklake_expire_snapshots</code> / <code>ducklake_cleanup_old_files</code> signatures against the pinned DuckLake version (ref: <a style="color:#3b82f6;" href="https://ducklake.select/docs/stable/duckdb/maintenance/expire_snapshots.html">expire</a> · <a style="color:#3b82f6;" href="https://ducklake.select/docs/stable/duckdb/maintenance/cleanup_old_files.html">cleanup</a>).</p>
+</div>
+
 <div class="info info-green">Storage is cheap and scalable. Data volume grows independently of compute. No coordination overhead between readers — they each read immutable files.</div>
 
 <!-- ==================== DESIGN DECISIONS ==================== -->
@@ -316,7 +341,7 @@
 </main>
 
 <footer class="site-footer">
-  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/05-s3-storage.md">05-s3-storage.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
 </footer>
 
 <script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>

@@ -16,10 +16,14 @@ commentary (as of mid-2026). The core claims hold; three points needed nuance.
   compaction to run. This is exactly the "one database, no extra services"
   benefit the design leans on.
 - **Snapshots are cheap, transactional rows.** A DuckLake snapshot is a few rows
-  in the metadata store; snapshots can reference parts of a Parquet file, so
-  millions can coexist. This validates the "write Parquet, then publish via a
-  Postgres transaction" invariant and the atomic, no-downtime swap for
-  materialized tables.
+  in the metadata store, so millions can coexist — the cost is catalog rows, not
+  data copies. Snapshot granularity is at the **file** level (plus append/delete
+  deltas tracked against those files), not arbitrary sub-file byte ranges: a
+  snapshot points at a set of Parquet files together with the appends/deletes
+  applied to them, so unchanged files are *shared* across snapshots rather than
+  copied. This validates the "write Parquet, then publish via a Postgres
+  transaction" invariant and the atomic, no-downtime swap for materialized
+  tables.
 - **ACID with snapshot isolation, including DDL.** All operations, including
   `CREATE TABLE` / `ALTER TABLE`, are fully transactional with all-or-nothing
   semantics. This backs the ingestion and materialization flows, which depend on
@@ -38,7 +42,7 @@ commentary (as of mid-2026). The core claims hold; three points needed nuance.
   client list includes Spark, Trino, DataFusion, and Pandas, and 0.3 added Iceberg
   read/write interop — but most connectors are work-in-progress and native Athena
   / Snowflake / BigQuery reads aren't there yet. For hardened cross-engine interop,
-  Iceberg remains ahead. See [04](04-postgres-ducklake.md) and
+  Iceberg remains ahead. (The 1.0 client-list and 0.3 Iceberg figures are illustrative — verify against current DuckLake release notes.) See [04](04-postgres-ducklake.md) and
   [07](07-scaling-boundaries.md).
 - **"No compaction" applies to metadata, not data files.** Eliminating catalog
   servers and metadata compaction is real. Data-file compaction (merging many
@@ -52,7 +56,7 @@ commentary (as of mid-2026). The core claims hold; three points needed nuance.
 - [DuckLake Transactions docs](https://ducklake.select/docs/stable/duckdb/advanced_features/transactions)
 - [The Essential Guide to DuckLake — MotherDuck](https://motherduck.com/learn/ducklake-guide/)
 - [duckdb/ducklake — GitHub](https://github.com/duckdb/ducklake)
-- [DuckDB Concurrency docs](https://duckdb.org/docs/current/connect/concurrency)
+- [DuckDB Concurrency docs](https://duckdb.org/docs/current/connect/concurrency.html)
 - [Quack protocol — multiple writers](https://siddique-ahmad.medium.com/duckdb-just-changed-the-game-meet-quack-the-protocol-that-unlocks-multiple-writers-d339e92f0bda)
 - [ducklake-spark connector — GitHub](https://github.com/motherduckdb/ducklake-spark)
 - [trino-ducklake connector — GitHub](https://github.com/awitten1/trino-ducklake)

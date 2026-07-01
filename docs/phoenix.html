@@ -50,6 +50,8 @@
   <div class="stat"><span class="num">1</span><span class="label">Auth boundary</span></div>
 </div>
 
+<div class="info info-blue"><strong>Target runtime:</strong> Phoenix 1.8 on Elixir 1.18 / Erlang OTP 27 (current as of mid-2026). Major versions are the target; patch levels are pinned by the release lockfile. <em>Proposed</em> pin — confirm against <code>mix.lock</code> once the <code>app/</code> scaffold is generated. OTP 27 over 28 (OTP 28 has a known <code>mix release</code> regex issue at the time of writing). See the DuckDB / PostgreSQL pins in the DuckDB Service page.</div>
+
 <h2>API</h2>
 <p class="subtitle">Programmatic entry point for clients and integrations.</p>
 
@@ -92,7 +94,7 @@
     <!-- DuckDB call -->
     <rect x="160" y="40" width="120" height="50" rx="6" fill="#1d4ed8"/>
     <text x="220" y="62" font-size="9" fill="white" text-anchor="middle">DuckDB call</text>
-    <text x="220" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">timeout: 30s</text>
+    <text x="220" y="76" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">sync: 5s / kill: 30s</text>
     
     <!-- Decision diamond -->
     <polygon points="330,65 360,40 390,65 360,90" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
@@ -126,9 +128,9 @@
 <div class="algo-card">
   <p class="algo-card-title">Routing logic</p>
   <ol class="algo-steps">
-    <li>Phoenix calls DuckDB service synchronously with a hard timeout (default: 30s).</li>
-    <li>If query completes within timeout, results stream back directly.</li>
-    <li>If timeout fires, Phoenix kills the connection, enqueues as Oban job, returns handle.</li>
+    <li>Phoenix calls DuckDB service synchronously with a sync deadline (default: 5s).</li>
+    <li>If query completes within the sync deadline, results stream back directly.</li>
+    <li>If the sync deadline fires, Phoenix enqueues as Oban job, returns 202 with handle. A hard server-side kill (30s) terminates runaway queries.</li>
     <li>Client receives 202 with handle, then polls or subscribes to PubSub for results.</li>
   </ol>
 </div>
@@ -166,6 +168,22 @@
     </div>
   </div>
 </div>
+
+<h2>PubSub (multi-pod adapter)</h2>
+<p class="subtitle">LiveView and the API rely on PubSub for real-time job/query/ingest events. On one pod any adapter works; the choice is load-bearing only at <code>phoenix.replicas &gt; 1</code>.</p>
+
+<div class="algo-card">
+  <p class="algo-card-title">Adapter selection</p>
+  <div class="spec-rows">
+    <div class="spec-row"><div class="spec-label">Adapter</div><div class="spec-value"><code>Phoenix.PubSub.PG2</code> — Phoenix default; zero infra, in-cluster broadcast; works on one pod or N.</div></div>
+    <div class="spec-row"><div class="spec-label">Cluster wiring</div><div class="spec-value">libcluster (Kubernetes DNS / EPMD strategy), shared cookie. Required <em>only</em> at <code>phoenix.replicas &gt; 1</code> so nodes form a BEAM cluster.</div></div>
+    <div class="spec-row"><div class="spec-label">Fallback (no clustering)</div><div class="spec-value"><code>Phoenix.PubSub.Postgres</code> (LISTEN/NOTIFY over the shared Postgres) when the BEAM can't be clustered — no Redis.</div></div>
+    <div class="spec-row"><div class="spec-label">Extra infra (Redis)</div><div class="spec-value"><strong>Not added by default.</strong> Only if a Redis is already operated; the design avoids a second stateful service.</div></div>
+  </div>
+</div>
+
+<div class="info info-blue">A job running on pod A must broadcast progress to a LiveView socket on pod B — PG2 + clustering is the multi-pod path; Postgres-backed PubSub is the no-extra-infra fallback.</div>
+<div class="info info-yellow">Proposed, not yet built. Confirm the discovery strategy (libcluster <code>Kubernetes.DNS</code> vs <code>Kubernetes.EPMD</code> vs ECS/gossip) against the deployment target at scaffold time.</div>
 
 <h2>Oban</h2>
 <p class="subtitle">Job engine, backed by the same Postgres instance.</p>
@@ -263,7 +281,7 @@
 </main>
 
 <footer class="site-footer">
-  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/02-phoenix-app.md">02-phoenix-app.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
 </footer>
 
 <script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>

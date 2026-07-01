@@ -63,7 +63,7 @@
   <div class="glossary-term">DuckDB <a href="https://duckdb.org/docs/" target="_blank" style="font-size:10px;color:#94a3b8;text-decoration:none;">↗</a></div>
   <div class="glossary-def">Embedded analytical SQL engine. One-writer, many-readers, single-process. Scans Parquet, joins, and aggregates in memory.</div>
   <div class="glossary-pros"><strong>Pros:</strong> Fastest single-node analytical engine; no separate server to manage; native Parquet and DuckLake support.</div>
-  <div class="glossary-cons"><strong>Cons:</strong> Single-writer per database; can't shuffle across machines; concurrency bounded by RAM.</div>
+  <div class="glossary-cons"><strong>Cons:</strong> Single-writer per database; single-node only — multi-threaded and uses every core, but can't shuffle work across machines (no distributed scale-out); workload bounded by one machine's RAM.</div>
   <div class="glossary-fit"><strong>Fit:</strong> Perfect for workloads where one machine's RAM is enough — which is most small-to-mid analytics.</div>
 </div>
 

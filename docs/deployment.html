@@ -81,13 +81,14 @@
   <div class="spec-rows">
     <div class="spec-row"><div class="spec-label">Postgres</div><div class="spec-value">Port <code>5432</code>. User: <code>postgres</code>, password: <code>postgres</code>. Auto-creates <code>phoenix_lake_dev</code> database.</div></div>
     <div class="spec-row"><div class="spec-label">MinIO</div><div class="spec-value">API port <code>9000</code>, console port <code>9001</code>. User: <code>minioadmin</code>. S3-compatible object storage.</div></div>
-    <div class="spec-row"><div class="spec-label">DuckDB</div><div class="spec-value">Port <code>8080</code>. Connects to Postgres (catalog) and MinIO (data). Memory limit: 4GB.</div></div>
+    <div class="spec-row"><div class="spec-label">DuckDB</div><div class="spec-value">Port <code>8080</code>. Connects to Postgres (catalog) and MinIO (data). Memory limit: 6GB.</div></div>
     <div class="spec-row"><div class="spec-label">Phoenix</div><div class="spec-value">Port <code>4000</code>. Web UI, API, Oban workers. Connects to all services.</div></div>
   </div>
 </div>
 
 <div class="algo-card">
   <p class="algo-card-title">Environment variables</p>
+  <p class="card-desc">Two complementary mechanisms — <strong>not</strong> competing. <code>config/{env}.yml</code> is the version-controlled source per environment (sizes, regions, bucket names, queue limits); the variables below are the <strong>runtime interface</strong> the Elixir release and DuckDB service actually read. A thin loader renders each <code>{env}.yml</code> into these vars at deploy time.</p>
   <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>DATABASE_URL=ecto://postgres:postgres@localhost/phoenix_lake_dev
 DUCKDB_HOST=localhost
 DUCKDB_PORT=8080
@@ -96,6 +97,7 @@ S3_BUCKET=phoenix-lake
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
 SECRET_KEY_BASE=dev_only_secret_key_base</code></pre>
+  <p class="card-desc"><strong>Secrets</strong> (<code>SECRET_KEY_BASE</code>, <code>WORKOS_API_KEY</code>, <code>DUCKDB_SERVICE_TOKEN</code>, DB/S3 credentials) are never placed in the yml — they are injected from the secret manager / deploy-time env into the same variables.</p>
 </div>
 
 <h2>Kubernetes (Helm)</h2>
@@ -129,7 +131,7 @@ SECRET_KEY_BASE=dev_only_secret_key_base</code></pre>
     <div class="spec-row"><div class="spec-label">postgres</div><div class="spec-value">External RDS or in-cluster Postgres. Connection string via <code>DATABASE_URL</code>.</div></div>
     <div class="spec-row"><div class="spec-label">s3</div><div class="spec-value">Existing S3 bucket. Credentials via IAM role or secrets.</div></div>
     <div class="spec-row"><div class="spec-label">duckdb.replicas</div><div class="spec-value">Number of DuckDB service pods. Default: 2. Auto-scales via HPA.</div></div>
-    <div class="spec-row"><div class="spec-label">duckdb.memory</div><div class="spec-value">Memory limit per DuckDB pod. Default: <code>4Gi</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">duckdb.memory</div><div class="spec-value">Memory limit per DuckDB pod. Default: <code>8Gi</code>.</div></div>
     <div class="spec-row"><div class="spec-label">phoenix.replicas</div><div class="spec-value">Number of Phoenix pods. Default: 2. Auto-scales via HPA.</div></div>
   </div>
 </div>
@@ -299,16 +301,17 @@ SECRET_KEY_BASE=dev_only_secret_key_base</code></pre>
     <div class="spec-row"><div class="spec-label">S3_BUCKET</div><div class="spec-value">S3 bucket name. <code>phoenix-lake</code></div></div>
     <div class="spec-row"><div class="spec-label">S3_REGION</div><div class="spec-value">AWS region. <code>us-east-1</code></div></div>
     <div class="spec-row"><div class="spec-label">SECRET_KEY_BASE</div><div class="spec-value">Phoenix secret. Generate with <code>mix phx.gen.secret</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">DUCKDB_SERVICE_TOKEN</div><div class="spec-value">Shared secret for Phoenix→DuckDB service auth. Generate with <code>mix phx.gen.secret</code>. Same value in both services.</div></div>
   </div>
 </div>
 
 <div class="algo-card">
   <p class="algo-card-title">Optional variables</p>
   <div class="spec-rows">
-    <div class="spec-row"><div class="spec-label">S3_ENDPOINT</div><div class="spec-value">Custom S3 endpoint (for MinIO). Not needed for AWS S3.</div></div>
-    <div class="spec-row"><div class="spec-label">S3_ACCESS_KEY</div><div class="spec-value">S3 credentials. Not needed when using IAM roles.</div></div>
-    <div class="spec-row"><div class="spec-label">S3_SECRET_KEY</div><div class="spec-value">S3 credentials. Not needed when using IAM roles.</div></div>
-    <div class="spec-row"><div class="spec-label">DUCKDB_MEMORY_LIMIT</div><div class="spec-value">Per-query memory limit. Default: <code>4GB</code>.</div></div>
+    <div class="spec-row"><div class="spec-label">AWS_ENDPOINT_URL_S3</div><div class="spec-value">Custom S3 endpoint (for MinIO). Not needed for AWS S3. Maps to DuckDB's <code>httpfs</code> extension.</div></div>
+    <div class="spec-row"><div class="spec-label">AWS_ACCESS_KEY_ID</div><div class="spec-value">S3 credentials. Not needed when using IAM roles.</div></div>
+    <div class="spec-row"><div class="spec-label">AWS_SECRET_ACCESS_KEY</div><div class="spec-value">S3 credentials. Not needed when using IAM roles.</div></div>
+    <div class="spec-row"><div class="spec-label">DUCKDB_MEMORY_LIMIT</div><div class="spec-value">DuckDB process-global memory cap (~75% of the 8Gi pod). Default: <code>6GB</code>. Spills to disk on overflow — see scaling/memory spec.</div></div>
     <div class="spec-row"><div class="spec-label">POOL_SIZE</div><div class="spec-value">Postgres connection pool size. Default: <code>10</code>.</div></div>
   </div>
 </div>

@@ -110,9 +110,23 @@ Proposed components, grouped by role:
   optimisation concern (partition on filtered columns, right-size files), never a
   correctness one — the catalog defines table contents.
 
-Per-environment differences would follow the repo convention of a
-`config/{env}.yml` per environment (dev, prod, produs, prodae, prodbr), sizing the
-Postgres instance, the DuckDB service, and S3 buckets per region.
+Per-environment differences follow the repo convention of a checked-in
+`config/{env}.yml` per environment (dev, prod, produs, prodae, prodbr) — the
+declarative source for things that vary by environment: Postgres instance size,
+DuckDB service CPU/RAM, S3 bucket names, and region. The `{env}.yml` and the
+**environment variables** are complementary, not competing:
+
+- `config/{env}.yml` is the human-edited, version-controlled source per
+  environment (sizes, regions, bucket names, queue limits).
+- Environment variables are the **runtime interface** the Elixir release and the
+  DuckDB service actually read (`DATABASE_URL`, `DUCKDB_HOST`/`DUCKDB_PORT`,
+  `S3_*`, `STORAGE_BACKEND`, queue/pool sizes — see `docs/deployment.html` for the
+  full list). A thin loader renders each `{env}.yml` into these vars at deploy
+  time.
+- Secrets (`SECRET_KEY_BASE`, `WORKOS_API_KEY`, `DUCKDB_SERVICE_TOKEN`, DB and S3
+  credentials) are **never** placed in the yml — they are injected from the
+  secret manager / deploy-time env into the same variables, overriding any
+  non-secret defaults.
 
 ## Build and deploy
 
@@ -128,7 +142,7 @@ the DuckDB service shipped as a container alongside the Phoenix release.
 - **DuckLake** — lakehouse table format storing metadata in SQL and data in
   Parquet; provides snapshots, ACID with snapshot isolation, and schema evolution.
 - **Postgres** — app database, Oban backend, and DuckLake catalog.
-- **S3 (or GCS/Azure Blob)** — Parquet object storage.
+- **S3-compatible object storage** — Parquet on AWS S3 (plus GCS via S3 interop and Azure Blob via the `azure` storage adapter; see [03](ducklake-control-plane/03-duckdb-service.md)).
 - **Oban** — Postgres-backed job engine for ingestion, transformation, and
   compaction.
 

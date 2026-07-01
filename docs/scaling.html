@@ -136,7 +136,7 @@
         <li>P95 latency > SLA → add container</li>
         <li>Queue depth > threshold → add container</li>
       </ul>
-      <p style="font-size:11px;color:#64748b;">Kubernetes HPA or ECS target tracking. Default 1; scales 1→10 (set min 2 for high availability).</p>
+      <p style="font-size:11px;color:#64748b;">Kubernetes HPA or ECS target tracking. Default 1; scales 1→10 (set min 2 for HA). Interactive-query P95 target: &lt; 5s.</p>
     </div>
   </div>
   <div class="split-card">
@@ -187,7 +187,7 @@
 </main>
 
 <footer class="site-footer">
-  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/07-scaling-boundaries.md">07-scaling-boundaries.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
 </footer>
 <script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
 <script>

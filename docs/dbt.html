@@ -100,7 +100,7 @@
   <div class="split-card">
     <div class="head">Platform provides</div>
     <div class="body">
-      <p>DuckDB execution, S3 credentials, DuckLake connections, <code>profiles.yml</code> generation, resource isolation, scheduling, and retry logic.</p>
+      <p>DuckDB execution, S3 credentials, DuckLake connections, <code>profiles.yml</code> generation, resource isolation, scheduling (editable per-project cron), test-result surfacing, and retry logic.</p>
       <p>Each run executes in an Oban worker that submits SQL to the long-running DuckDB service over HTTP; the service enforces per-query memory and time caps.</p>
     </div>
   </div>
@@ -135,7 +135,7 @@
         expression: "day(ordered_at)"
   refining:
     description: "Transformed and enriched data"
-    retention_days: 180
+    retention_days: 90
     partition_columns:
       - name: year
         expression: "year(ordered_at)"
@@ -147,13 +147,63 @@
     partition_columns: []</code></pre>
 </div>
 
+<div class="algo-card">
+  <p class="algo-card-title">Template validation</p>
+  <p style="font-size:12px;color:#475569;margin:0 0 8px 0;">Every project is validated on registration and on each sync. It must pass all of these before it runs:</p>
+  <ol class="algo-steps">
+    <li><strong>ducklake.yml exists</strong> at the repo root and is valid YAML.</li>
+    <li><strong>All three layers defined</strong> — <code>landing</code>, <code>refining</code>, <code>reporting</code>.</li>
+    <li><strong>Required fields present</strong> — each layer has a <code>description</code>.</li>
+    <li><strong>dbt_project.yml exists</strong> and is parseable.</li>
+    <li><strong>All <code>source()</code> references target <code>landing</code></strong> — models may only read from the landing catalog.</li>
+    <li><strong>All <code>ref()</code> outputs target <code>refining</code> or <code>reporting</code></strong> — writes to landing are not allowed.</li>
+    <li><strong>Reporting models use <code>external</code> materialization</strong> — Parquet to <code>s3://&lt;bucket&gt;/reporting/...</code>.</li>
+    <li><strong>No hardcoded S3 paths or credentials</strong> — the platform injects secrets and data paths.</li>
+  </ol>
+  <p style="font-size:12px;color:#475569;margin:8px 0 0 0;">If validation fails, the project is rejected with a clear error and is not run until it passes.</p>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Platform execution — <code>profiles.yml</code></p>
+  <p style="font-size:12px;color:#475569;margin:0 0 8px 0;">The worker generates a <code>profiles.yml</code> that points a thin custom adapter at the DuckDB service over HTTP. The adapter is a small fork of <code>dbt-duckdb</code> that overrides only the connection layer — it inherits DuckDB dialect, DuckLake <code>ATTACH</code>, and <code>external</code> materialization, and swaps the transport to submit compiled SQL over HTTP instead of opening a local DuckDB connection.</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code>default:
+  outputs:
+    dev:
+      type: duckdb_service        # custom adapter (dbt-duckdb fork)
+      host: duckdb-service         # DuckDB service HTTP endpoint
+      port: 8080
+      # S3 credentials and data paths are injected by the service; the service
+      # has all three DuckLake catalogs (landing, refining, reporting) ATTACHed.</code></pre>
+  <p style="font-size:12px;color:#475569;margin:8px 0 0 0;">Because the service has all three catalogs ATTACHed, <code>source('landing', ...)</code> and <code>ref()</code> resolve to catalog-qualified names the service routes correctly — there is no per-run <code>dbname</code> switch. DuckDB is never embedded in the BEAM or the Oban worker.</p>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">dbt project convention — catalog mapping</p>
+  <p style="font-size:12px;color:#475569;margin:0 0 8px 0;">Users map their dbt package schemas onto the platform catalogs so sources and refs resolve correctly:</p>
+  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;margin:0;"><code># dbt_project.yml
+name: 'my_project'
+version: '1.0.0'
+
+models:
+  my_project:
+    staging:
+      +schema: landing
+    marts:
+      +schema: refining</code></pre>
+</div>
+
+<div class="algo-card">
+  <p class="algo-card-title">Incremental models</p>
+  <p style="font-size:12px;color:#475569;margin:0;">dbt Core v2 (Fusion) supports incremental strategies (<code>merge</code>, <code>append</code>, <code>delete+insert</code>, <code>microbatch</code>) on DuckLake tables. The platform supports these out of the box — no special configuration needed. <code>microbatch</code> is particularly effective for partitioned DuckLake tables.</p>
+</div>
+
 <div class="info info-blue"><strong>Full design:</strong> See <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/09-dbt-integration.md" style="color:#1d4ed8">09 — dbt integration</a> for project conventions, isolation, failure handling, and incremental model support.</div>
 
 <div class="info info-yellow"><strong>Catalog creation.</strong> The three catalogs (landing, refining, reporting) are created automatically by the platform at project setup. Users don't need to set up catalogs — they just write dbt models that target them.</div>
 </main>
 
 <footer class="site-footer">
-  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane.md">architecture/ducklake-control-plane.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
+  <p>Design spec: <a href="https://github.com/TRANTANKHOA/phoenix-lake/blob/main/architecture/ducklake-control-plane/09-dbt-integration.md">09-dbt-integration.md</a> · full set: <a href="https://github.com/TRANTANKHOA/phoenix-lake/tree/main/architecture/ducklake-control-plane">architecture/ducklake-control-plane/</a> · Phoenix Lake</p>
 </footer>
 <script>document.querySelectorAll("a[href^=\"http\"]").forEach(a=>a.target="_blank")</script>
 <script>
